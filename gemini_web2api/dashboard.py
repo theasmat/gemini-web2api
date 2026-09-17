@@ -713,10 +713,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     <!-- Tab Bar -->
     <div class="tab-bar">
-      <button class="tab-btn active" onclick="switchTab('playground')">🧪 API Playground</button>
-      <button class="tab-btn" onclick="switchTab('logs')">📜 Live Request Logs</button>
-      <button class="tab-btn" onclick="switchTab('snippets')">💻 Client Snippets</button>
-      <button class="tab-btn" onclick="switchTab('settings')">⚙️ Configuration</button>
+      <button class="tab-btn active" data-tab="playground" onclick="switchTab('playground', event)">🧪 API Playground</button>
+      <button class="tab-btn" data-tab="logs" onclick="switchTab('logs', event)">📜 Live Request Logs</button>
+      <button class="tab-btn" data-tab="snippets" onclick="switchTab('snippets', event)">💻 Client Snippets</button>
+      <button class="tab-btn" data-tab="settings" onclick="switchTab('settings', event)">⚙️ Configuration</button>
     </div>
 
     <!-- Tab 1: Playground -->
@@ -878,24 +878,35 @@ gemini</code></pre>
 
   <!-- Login Modal -->
   <div class="modal-backdrop" id="login-modal">
-    <div class="modal-box">
-      <div class="modal-title">🔑 Google Gemini Web Login</div>
-      <p style="font-size: 0.88rem; color: var(--text-muted);">
-        Run the automated login tool from your terminal or trigger browser authentication.
+    <div class="modal-box" style="max-width: 540px;">
+      <div class="modal-title">🔑 Google Gemini Web Login Helper</div>
+      <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 14px;">
+        Automatically launch an isolated browser session, sign in to your Google Account at <code>gemini.google.com</code>, and hot-sync session credentials directly to the server.
       </p>
 
-      <div class="form-group">
-        <span class="form-label">Terminal Command (CLI Automation with uv):</span>
-        <pre><code>uv run python gemini_login.py</code></pre>
+      <!-- Live status card -->
+      <div id="login-status-box" style="background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted);">STATUS</span>
+          <span id="login-badge" class="card-badge badge-anon" style="font-size: 0.72rem;">Ready</span>
+        </div>
+        <div id="login-msg" style="font-size: 0.88rem; line-height: 1.5; color: var(--text);">
+          Click "Launch Browser" to start login automation.
+        </div>
+        <div id="login-spinner" style="display: none; align-items: center; gap: 8px; margin-top: 10px; font-size: 0.8rem; color: var(--accent-blue);">
+          <div class="status-dot"></div>
+          <span>Waiting for Google account sign-in in browser window...</span>
+        </div>
       </div>
 
-      <div style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">
-        This automatically launches Chrome/Edge/Brave/Chromium, waits for you to sign in to your Google Account at <code>gemini.google.com</code>, and extracts your cookies, <code>SAPISID</code>, and <code>SNlM0e</code> XSRF token directly!
+      <div class="form-group" style="margin-bottom: 14px;">
+        <span class="form-label">Or Run in Terminal via CLI:</span>
+        <pre><code>gemini-web2api login</code></pre>
       </div>
 
-      <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px;">
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
         <button class="btn btn-secondary" onclick="closeLoginModal()">Close</button>
-        <button class="btn btn-primary" onclick="triggerAutoLogin()">🚀 Launch Login Helper</button>
+        <button class="btn btn-primary" id="btn-modal-launch" onclick="triggerAutoLogin()">🚀 Launch Browser & Sign In</button>
       </div>
     </div>
   </div>
@@ -1123,13 +1134,20 @@ gemini</code></pre>
       const startTime = performance.now();
       let promptTokens = Math.ceil(prompt.length / 4);
 
+      // Resolve authorization header
+      const headers = { 'Content-Type': 'application/json' };
+      const keySpan = document.getElementById('api-key-text');
+      const keyVal = keySpan ? keySpan.textContent.trim() : '';
+      if (keyVal && !keyVal.startsWith('None') && keyVal !== '') {
+        headers['Authorization'] = 'Bearer ' + keyVal;
+      } else {
+        headers['Authorization'] = 'Bearer sk-gemini';
+      }
+
       try {
         const res = await fetch('/v1/chat/completions', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + document.getElementById('api-key-text').textContent
-          },
+          headers: headers,
           body: JSON.stringify({
             model: model,
             messages: isStateful ? playgroundHistory : [{ role: 'user', content: prompt }],
@@ -1160,6 +1178,12 @@ gemini</code></pre>
               if (dataStr === '[DONE]') continue;
               try {
                 const json = JSON.parse(dataStr);
+                if (json.error) {
+                  const errMsg = json.error.message || JSON.stringify(json.error);
+                  fullText += `\n\n⚠️ Error: ${errMsg}`;
+                  renderPlaygroundHistory(fullText);
+                  continue;
+                }
                 const delta = json.choices?.[0]?.delta?.content || '';
                 fullText += delta;
                 renderPlaygroundHistory(fullText);
@@ -1236,15 +1260,86 @@ gemini</code></pre>
       }
     }
 
+    let loginPollTimer = null;
+
     async function triggerAutoLogin() {
+      const launchBtn = document.getElementById('btn-modal-launch');
+      const badge = document.getElementById('login-badge');
+      const msg = document.getElementById('login-msg');
+      const spinner = document.getElementById('login-spinner');
+
+      openLoginModal();
+      if (launchBtn) launchBtn.disabled = true;
+      if (badge) {
+        badge.textContent = 'Launching...';
+        badge.className = 'card-badge badge-pro';
+      }
+      if (msg) msg.textContent = 'Starting browser with dedicated profile...';
+      if (spinner) spinner.style.display = 'flex';
+
       try {
         const res = await fetch('/api/auth/login', { method: 'POST' });
         const data = await res.json();
-        alert(data.message || 'Login automation launched in background! Please check the opened browser.');
-        closeLoginModal();
+        if (msg) msg.textContent = data.message || 'Browser launched! Please sign in to Google / Gemini in the opened browser window.';
+
+        // Start polling login status
+        if (loginPollTimer) clearInterval(loginPollTimer);
+        loginPollTimer = setInterval(pollLoginStatus, 1500);
       } catch (e) {
-        alert('Could not trigger auto login: ' + e.message + '\\nYou can run: uv run python gemini_login.py in your terminal.');
+        if (msg) msg.textContent = 'Could not trigger login helper: ' + e.message;
+        if (badge) {
+          badge.textContent = 'Error';
+          badge.className = 'card-badge badge-anon';
+        }
+        if (spinner) spinner.style.display = 'none';
+        if (launchBtn) launchBtn.disabled = false;
       }
+    }
+
+    async function pollLoginStatus() {
+      try {
+        const res = await fetch('/api/auth/login-status');
+        if (!res.ok) return;
+        const data = await res.json();
+        const badge = document.getElementById('login-badge');
+        const msg = document.getElementById('login-msg');
+        const spinner = document.getElementById('login-spinner');
+        const launchBtn = document.getElementById('btn-modal-launch');
+
+        if (data.status === 'running') {
+          if (badge) {
+            badge.textContent = 'Running';
+            badge.className = 'card-badge badge-pro';
+          }
+          if (msg) msg.textContent = data.message || 'Waiting for login...';
+          if (spinner) spinner.style.display = 'flex';
+        } else if (data.status === 'success') {
+          if (loginPollTimer) { clearInterval(loginPollTimer); loginPollTimer = null; }
+          if (badge) {
+            badge.textContent = 'Authenticated!';
+            badge.className = 'card-badge badge-pro';
+          }
+          const accName = data.auth?.account_name || 'User';
+          const accEmail = data.auth?.account_email || '';
+          const accStr = accEmail ? `${accName} (${accEmail})` : accName;
+          if (msg) msg.innerHTML = `✅ <strong>Login Successful!</strong><br>Authenticated as ${accStr}. Credentials hot-synced with server.`;
+          if (spinner) spinner.style.display = 'none';
+          if (launchBtn) launchBtn.disabled = false;
+          fetchStatus();
+          setTimeout(() => {
+            closeLoginModal();
+          }, 2500);
+        } else if (data.status === 'error') {
+          if (loginPollTimer) { clearInterval(loginPollTimer); loginPollTimer = null; }
+          if (badge) {
+            badge.textContent = 'Failed';
+            badge.className = 'card-badge badge-anon';
+          }
+          if (msg) msg.textContent = '❌ ' + (data.message || 'Login failed or timed out.');
+          if (spinner) spinner.style.display = 'none';
+          if (launchBtn) launchBtn.disabled = false;
+        }
+      } catch (err) {}
     }
 
     async function saveSettings() {
@@ -1287,10 +1382,14 @@ gemini</code></pre>
       }
     }
 
-    function switchTab(name) {
+    function switchTab(name, evt) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-      if (event && event.target) event.target.classList.add('active');
+      let btn = evt ? (evt.currentTarget || evt.target) : null;
+      if (!btn) {
+        btn = document.querySelector(`.tab-btn[data-tab="${name}"]`) || document.querySelector(`.tab-btn[onclick*="${name}"]`);
+      }
+      if (btn) btn.classList.add('active');
       const pane = document.getElementById('tab-' + name);
       if (pane) pane.classList.add('active');
       if (name === 'logs') refreshLogs();

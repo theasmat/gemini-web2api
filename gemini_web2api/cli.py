@@ -81,6 +81,10 @@ def cmd_status(args=None):
 
 def cmd_start(args=None):
     """Start HTTP proxy server."""
+    cfg_p = find_config()
+    if cfg_p:
+        load_config(cfg_p)
+
     port = getattr(args, "port", None) or CONFIG.get("port", 8081)
     open_dash = getattr(args, "open", False)
 

@@ -20,6 +20,13 @@ _SERVER_START_TIME = time.time()
 _REQUEST_LOGS = []
 _LOGS_LOCK = threading.Lock()
 _TOTAL_REQUESTS = 0
+_LOGIN_TRACKER = {
+    "status": "idle",
+    "message": "No login in progress",
+    "updated_at": 0,
+    "auth": None
+}
+_LOGIN_LOCK = threading.Lock()
 
 
 def _record_request_log(client: str, method: str, path: str, model: str, status: int, duration_ms: int, error: str = None):
@@ -191,6 +198,12 @@ class GeminiHandler(BaseHTTPRequestHandler):
             # Auth Status endpoint
             if self.path in ("/v1/auth/status", "/api/auth/status"):
                 self.send_json(get_auth_details())
+                return
+
+            # Login Status endpoint
+            if self.path in ("/v1/auth/login-status", "/api/auth/login-status"):
+                with _LOGIN_LOCK:
+                    self.send_json(dict(_LOGIN_TRACKER))
                 return
 
             # API Logs endpoint
@@ -431,13 +444,50 @@ class GeminiHandler(BaseHTTPRequestHandler):
         self.send_json({"status": "ok", "config": CONFIG})
 
     def _handle_trigger_login(self):
-        """Launch the automated login tool in a background thread."""
+        """Launch the automated login tool in a background thread with real-time status tracking."""
+        global _LOGIN_TRACKER
+        with _LOGIN_LOCK:
+            if _LOGIN_TRACKER.get("status") == "running":
+                self.send_json({
+                    "status": "running",
+                    "message": "Login helper is already running! Please check the opened browser window."
+                })
+                return
+
+            _LOGIN_TRACKER.update({
+                "status": "running",
+                "message": "Launching browser with dedicated profile...",
+                "updated_at": time.time(),
+                "auth": None
+            })
+
         def _bg_run():
             try:
+                def _progress(state, msg):
+                    with _LOGIN_LOCK:
+                        _LOGIN_TRACKER["status"] = "running" if state in ("connecting", "waiting_for_login", "in_progress") else state
+                        _LOGIN_TRACKER["message"] = msg
+                        _LOGIN_TRACKER["updated_at"] = time.time()
+
                 from .login import launch_login_automation
-                launch_login_automation()
+                port = CONFIG.get("port", 8081)
+                success = launch_login_automation(sync_url=f"http://127.0.0.1:{port}", progress_cb=_progress)
+                with _LOGIN_LOCK:
+                    if success:
+                        _LOGIN_TRACKER["status"] = "success"
+                        _LOGIN_TRACKER["message"] = "Logged in successfully! Credentials hot-synced with server."
+                        _LOGIN_TRACKER["auth"] = get_auth_details()
+                    else:
+                        if _LOGIN_TRACKER["status"] == "running":
+                            _LOGIN_TRACKER["status"] = "error"
+                            _LOGIN_TRACKER["message"] = "Login helper finished without capturing credentials."
             except Exception as e:
                 log(f"Background login launch error: {e}")
+                with _LOGIN_LOCK:
+                    _LOGIN_TRACKER["status"] = "error"
+                    _LOGIN_TRACKER["message"] = f"Error during login: {e}"
+            with _LOGIN_LOCK:
+                _LOGIN_TRACKER["updated_at"] = time.time()
 
         t = threading.Thread(target=_bg_run, daemon=True)
         t.start()
@@ -505,6 +555,13 @@ class GeminiHandler(BaseHTTPRequestHandler):
                 pass
             except Exception as e:
                 log(f"Stream error: {e}")
+                try:
+                    err_chunk = {"error": {"message": str(e)}}
+                    self.wfile.write(f"data: {json.dumps(err_chunk)}\n\n".encode())
+                    self.wfile.write(b"data: [DONE]\n\n")
+                    self.wfile.flush()
+                except:
+                    pass
             return
 
         try:
@@ -870,3 +927,28 @@ class GeminiHandler(BaseHTTPRequestHandler):
 class ThreadedServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
+
+
+def run_server(port: int = None, open_dash: bool = False):
+    from .config import load_config, find_config
+    cfg_p = find_config()
+    if cfg_p:
+        load_config(cfg_p)
+    server_port = port or CONFIG.get("port", 8081)
+    server = ThreadedServer((CONFIG.get("host", "0.0.0.0"), server_port), GeminiHandler)
+    dash_url = f"http://localhost:{server_port}/dash"
+    base_url = f"http://localhost:{server_port}/v1"
+    print(f"\n✓ gemini-web2api server started!")
+    print(f"  Dashboard: {dash_url}")
+    print(f"  Base URL:  {base_url}\n")
+    if open_dash:
+        import webbrowser
+        try:
+            webbrowser.open(dash_url)
+        except:
+            pass
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    run_server()

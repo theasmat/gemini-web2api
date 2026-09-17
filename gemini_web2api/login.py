@@ -10,7 +10,7 @@ import urllib.parse
 import subprocess
 import argparse
 import asyncio
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Optional, Dict, Any, Tuple, List, Callable
 
 EXPORT_ORDER = [
     "SID",
@@ -115,15 +115,23 @@ async def send_cdp_command(ws, method: str, params: dict = None, cmd_id: int = 1
             return data
 
 
-async def extract_session_via_cdp(cdp_port: int, max_wait_sec: int = 180) -> Optional[dict]:
+async def extract_session_via_cdp(
+    cdp_port: int,
+    max_wait_sec: int = 180,
+    progress_cb: Optional[Callable[[str, str], None]] = None
+) -> Optional[dict]:
     """Connect to Chrome via CDP and wait for Gemini session cookies + XSRF token."""
     try:
         import websockets
     except ImportError:
         print("[!] websockets library not found. Run: uv pip install websockets or pip install websockets")
+        if progress_cb:
+            progress_cb("failed", "websockets library not found.")
         return None
 
     print(f"[*] Connecting to browser remote debugging port {cdp_port}...")
+    if progress_cb:
+        progress_cb("connecting", f"Connecting to browser remote debugging port {cdp_port}...")
     start_time = time.time()
     tab_ws_url = None
 
@@ -150,9 +158,13 @@ async def extract_session_via_cdp(cdp_port: int, max_wait_sec: int = 180) -> Opt
 
     if not tab_ws_url:
         print("[!] Could not connect to browser DevTools endpoint.")
+        if progress_cb:
+            progress_cb("failed", "Could not connect to browser DevTools endpoint within 30s.")
         return None
 
     print("[*] Monitoring browser session... Please sign in to Google / Gemini in the opened browser window.")
+    if progress_cb:
+        progress_cb("waiting_for_login", "Browser opened! Please sign in to Google / Gemini in the browser window.")
 
     async with websockets.connect(tab_ws_url) as ws:
         cmd_id = 1
@@ -283,6 +295,9 @@ async def extract_session_via_cdp(cdp_port: int, max_wait_sec: int = 180) -> Opt
             # Check if we have complete credentials
             if has_sapisid and has_session and xsrf_token:
                 cookie_str = "; ".join(f"{k}={google_cookies[k]}" for k in EXPORT_ORDER if k in google_cookies)
+                if progress_cb:
+                    acc_label = f"{account_name} ({account_email})" if (account_name or account_email) else "Authenticated"
+                    progress_cb("success", f"Captured Google session credentials! [{acc_label}]")
                 return {
                     "cookie": cookie_str,
                     "sapisid": google_cookies["SAPISID"],
@@ -302,6 +317,8 @@ async def extract_session_via_cdp(cdp_port: int, max_wait_sec: int = 180) -> Opt
                 if current_url:
                     status_parts.append(f"URL: {current_url[:40]}...")
                 print(f"[*] Waiting for login... [{', '.join(status_parts)}]")
+                if progress_cb:
+                    progress_cb("in_progress", f"Waiting for Google login... [{', '.join(status_parts)}]")
                 last_log = time.time()
 
             await asyncio.sleep(1.5)
@@ -315,13 +332,17 @@ def run_login_flow(
     output_file: str = "gemini-auth.json",
     sync_url: str = "http://127.0.0.1:8081",
     headless: bool = False,
-    timeout_sec: int = 180
+    timeout_sec: int = 180,
+    progress_cb: Optional[Callable[[str, str], None]] = None
 ) -> bool:
     """Execute complete web login flow and extract cookies."""
     browser_exe = browser_path or find_browser_executable()
     if not browser_exe:
-        print("[!] No Chromium-based browser (Chrome, Brave, Edge, Chromium) found.")
+        msg = "No Chromium-based browser (Chrome, Brave, Edge, Chromium) found."
+        print(f"[!] {msg}")
         print("    Please install Google Chrome or Microsoft Edge, or specify --browser <path>")
+        if progress_cb:
+            progress_cb("failed", msg)
         return False
 
     profile = profile_dir or get_default_profile_dir()
@@ -340,6 +361,8 @@ def run_login_flow(
         browser_exe,
         f"--remote-debugging-port={cdp_port}",
         f"--user-data-dir={profile}",
+        "--remote-allow-origins=*",
+        "--new-window",
         "--no-first-run",
         "--no-default-browser-check",
         "--disable-blink-features=AutomationControlled",
@@ -349,10 +372,19 @@ def run_login_flow(
         cmd.append("--headless=new")
 
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if sys.platform == "darwin" and not headless:
+        try:
+            app_name = os.path.splitext(os.path.basename(browser_exe))[0]
+            subprocess.Popen(["osascript", "-e", f'tell application "{app_name}" to activate'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
     try:
-        auth_data = asyncio.run(extract_session_via_cdp(cdp_port, max_wait_sec=timeout_sec))
+        auth_data = asyncio.run(extract_session_via_cdp(cdp_port, max_wait_sec=timeout_sec, progress_cb=progress_cb))
         if not auth_data:
             print("[!] Failed to capture complete Gemini credentials within the timeout period.")
+            if progress_cb:
+                progress_cb("failed", "Failed to capture Gemini credentials within timeout.")
             return False
 
         # Write to output file and persistent global user config
@@ -486,9 +518,9 @@ def check_auth_status(auth_file: str = "gemini-auth.json") -> dict:
         return {"valid": False, "error": str(e)}
 
 
-def launch_login_automation():
+def launch_login_automation(sync_url: str = "http://127.0.0.1:8081", progress_cb: Optional[Callable] = None) -> bool:
     """Helper to launch login automation in background or from dashboard."""
-    run_login_flow()
+    return run_login_flow(sync_url=sync_url, progress_cb=progress_cb)
 
 
 def main():

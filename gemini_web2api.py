@@ -36,6 +36,7 @@ import binascii
 from typing import Optional
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
+import threading
 
 try:
     import httpx
@@ -44,6 +45,14 @@ except ImportError:
     HAS_HTTPX = False
 
 __version__ = "1.2.0"
+
+_LOGIN_TRACKER = {
+    "status": "idle",
+    "message": "No login in progress",
+    "updated_at": 0,
+    "auth": None
+}
+_LOGIN_LOCK = threading.Lock()
 
 
 # ─── Configuration ───────────────────────────────────────────────────────────
@@ -799,6 +808,11 @@ class GeminiHandler(BaseHTTPRequestHandler):
                 self.send_json(get_auth_details())
                 return
 
+            if self.path in ("/v1/auth/login-status", "/api/auth/login-status"):
+                with _LOGIN_LOCK:
+                    self.send_json(dict(_LOGIN_TRACKER))
+                return
+
             if self.path.startswith("/v1") and not self._authorized():
                 self.send_json({"error": {"message": "invalid api key"}}, 401)
                 return
@@ -992,13 +1006,50 @@ class GeminiHandler(BaseHTTPRequestHandler):
         self.send_json({"status": "ok", "config": CONFIG})
 
     def _handle_trigger_login(self):
-        import threading
+        global _LOGIN_TRACKER
+        with _LOGIN_LOCK:
+            if _LOGIN_TRACKER.get("status") == "running":
+                self.send_json({
+                    "status": "running",
+                    "message": "Login helper is already running! Please check the opened browser window."
+                })
+                return
+
+            _LOGIN_TRACKER.update({
+                "status": "running",
+                "message": "Launching browser with dedicated profile...",
+                "updated_at": time.time(),
+                "auth": None
+            })
+
         def _bg_run():
             try:
+                def _progress(state, msg):
+                    with _LOGIN_LOCK:
+                        _LOGIN_TRACKER["status"] = "running" if state in ("connecting", "waiting_for_login", "in_progress") else state
+                        _LOGIN_TRACKER["message"] = msg
+                        _LOGIN_TRACKER["updated_at"] = time.time()
+
                 from gemini_web2api.login import launch_login_automation
-                launch_login_automation()
+                port = CONFIG.get("port", 8081)
+                success = launch_login_automation(sync_url=f"http://127.0.0.1:{port}", progress_cb=_progress)
+                with _LOGIN_LOCK:
+                    if success:
+                        _LOGIN_TRACKER["status"] = "success"
+                        _LOGIN_TRACKER["message"] = "Logged in successfully! Credentials hot-synced with server."
+                        _LOGIN_TRACKER["auth"] = get_auth_details()
+                    else:
+                        if _LOGIN_TRACKER["status"] == "running":
+                            _LOGIN_TRACKER["status"] = "error"
+                            _LOGIN_TRACKER["message"] = "Login helper finished without capturing credentials."
             except Exception as e:
                 log(f"Background login error: {e}")
+                with _LOGIN_LOCK:
+                    _LOGIN_TRACKER["status"] = "error"
+                    _LOGIN_TRACKER["message"] = f"Error during login: {e}"
+            with _LOGIN_LOCK:
+                _LOGIN_TRACKER["updated_at"] = time.time()
+
         t = threading.Thread(target=_bg_run, daemon=True)
         t.start()
         self.send_json({"status": "ok", "message": "Login automation started in background."})
@@ -1096,6 +1147,13 @@ class GeminiHandler(BaseHTTPRequestHandler):
                 pass
             except Exception as e:
                 log(f"Stream error: {e}")
+                try:
+                    err_chunk = {"error": {"message": str(e)}}
+                    self.wfile.write(f"data: {json.dumps(err_chunk)}\n\n".encode())
+                    self.wfile.write(b"data: [DONE]\n\n")
+                    self.wfile.flush()
+                except:
+                    pass
             return
 
         # Non-streaming (or tool calling which needs full response)

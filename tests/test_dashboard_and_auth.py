@@ -38,12 +38,24 @@ class DashboardAndAuthTests(unittest.TestCase):
         _cookie_cache.clear()
         _cookie_cache.update({"str": "", "sapisid": None, "mtime": 0})
         # Clean test auth files
-        for f in ["test-auth.json", "gemini-auth.json", "cookie.txt"]:
+        for f in [
+            "test-auth.json",
+            "gemini-auth.json",
+            "cookie.txt",
+            os.path.expanduser("~/.gemini-web2api/gemini-auth.json"),
+            os.path.expanduser("~/.gemini-web2api/cookie.txt"),
+        ]:
             if os.path.exists(f):
                 try:
                     os.remove(f)
                 except:
                     pass
+        if os.path.exists("./config.json"):
+            try:
+                with open("./config.json", "w") as f:
+                    json.dump(self.original_config, f, indent=2)
+            except:
+                pass
 
     def _request(self, method: str, path: str, body: dict = None, headers: dict = None):
         conn = http.client.HTTPConnection("127.0.0.1", self.port)
@@ -216,6 +228,13 @@ class DashboardAndAuthTests(unittest.TestCase):
         self.assertIn("[Assistant]: 2+2 is 4.", prompt)
         self.assertIn("Multiply that by 10.", prompt)
         self.assertEqual(images, [])
+
+    def test_login_status_endpoint(self):
+        status, headers, body = self._request("GET", "/api/auth/login-status")
+        self.assertEqual(status, 200)
+        data = json.loads(body)
+        self.assertIn("status", data)
+        self.assertIn("message", data)
 
 
 if __name__ == "__main__":
