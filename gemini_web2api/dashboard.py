@@ -1171,7 +1171,7 @@ gemini</code></pre>
           const { done, value } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
+          const lines = chunk.split(String.fromCharCode(10));
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               const dataStr = line.slice(6).trim();
@@ -1180,7 +1180,7 @@ gemini</code></pre>
                 const json = JSON.parse(dataStr);
                 if (json.error) {
                   const errMsg = json.error.message || JSON.stringify(json.error);
-                  fullText += `\n\n⚠️ Error: ${errMsg}`;
+                  fullText += String.fromCharCode(10, 10) + '⚠️ Error: ' + errMsg;
                   renderPlaygroundHistory(fullText);
                   continue;
                 }
