@@ -26,17 +26,41 @@ Convert Google Gemini's web interface into an OpenAI-compatible API. Zero cost, 
 
 ## Installation & Quick Start
 
-### Global Installation (CLI Tool)
+### 1. One-Line System Installation
 
-Install globally as a system command using `uv` or `pipx`:
+#### macOS / Linux
 
 ```bash
-# Install globally with uv:
-uv tool install .
+# Run the local installer script:
+./install.sh
+
+# Or install directly from GitHub in one command:
+curl -fsSL https://raw.githubusercontent.com/theasmat/gemini-web2api/main/install.sh | bash
+```
+
+#### Windows (PowerShell)
+
+```powershell
+# Ensure uv is installed, then install gemini-web2api:
+irm https://astral.sh/uv/install.ps1 | iex
+uv tool install git+https://github.com/theasmat/gemini-web2api.git
+```
+
+---
+
+### 2. Manual Installation
+
+```bash
+# Using uv tool (recommended):
+uv tool install . --force
+
+# Or using pipx:
+pipx install . --force
 
 # Or run instantly without installation:
-uvx --from . gemini-web2api
+uvx --from git+https://github.com/theasmat/gemini-web2api.git gemini-web2api
 ```
+
 
 ---
 
