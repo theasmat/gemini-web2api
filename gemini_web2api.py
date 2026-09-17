@@ -117,13 +117,44 @@ def log(msg: str):
         sys.stderr.flush()
 
 
+def get_global_config_dir() -> str:
+    """Return persistent global configuration directory."""
+    base = os.path.expanduser("~/.config/gemini-web2api")
+    os.makedirs(base, exist_ok=True)
+    return base
+
+
+def get_default_auth_path() -> str:
+    """Return default persistent global auth file path."""
+    return os.path.join(get_global_config_dir(), "gemini-auth.json")
+
+
+def find_auth_file():
+    """Find persistent auth file across explicit configs, local directory, and global config."""
+    if CONFIG.get("cookie_file") and os.path.exists(CONFIG["cookie_file"]):
+        return CONFIG["cookie_file"]
+    if os.path.exists("./gemini-auth.json"):
+        return os.path.abspath("./gemini-auth.json")
+    global_path = os.path.expanduser("~/.config/gemini-web2api/gemini-auth.json")
+    if os.path.exists(global_path):
+        return global_path
+    if os.path.exists("./cookie.txt"):
+        return os.path.abspath("./cookie.txt")
+    global_cookie = os.path.expanduser("~/.config/gemini-web2api/cookie.txt")
+    if os.path.exists(global_cookie):
+        return global_cookie
+    return None
+
+
 def load_cookie() -> tuple:
-    """Load cookie from file with dynamic config synchronization. Returns (cookie_str, sapisid)."""
+    """Load cookie from file with dynamic config synchronization and auto-discovery. Returns (cookie_str, sapisid)."""
     cookie_file = CONFIG.get("cookie_file")
-    if not cookie_file:
-        return "", None
-    if not os.path.exists(cookie_file):
-        return "", None
+    if not cookie_file or not os.path.exists(cookie_file):
+        cookie_file = find_auth_file()
+        if cookie_file and os.path.exists(cookie_file):
+            CONFIG["cookie_file"] = cookie_file
+        else:
+            return "", None
     try:
         with open(cookie_file, "r") as f:
             content = f.read().strip()
@@ -870,14 +901,19 @@ class GeminiHandler(BaseHTTPRequestHandler):
             "account_photo": account_photo
         }
 
-        auth_file_path = os.path.abspath("gemini-auth.json")
-        try:
-            with open(auth_file_path, "w") as f:
-                json.dump(auth_payload, f, indent=2)
-        except Exception as e:
-            log(f"Error saving gemini-auth.json: {e}")
+        save_paths = [
+            os.path.abspath("gemini-auth.json"),
+            get_default_auth_path()
+        ]
+        for p in save_paths:
+            try:
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                with open(p, "w") as f:
+                    json.dump(auth_payload, f, indent=2)
+            except Exception as e:
+                log(f"Error saving {p}: {e}")
 
-        CONFIG["cookie_file"] = auth_file_path
+        CONFIG["cookie_file"] = save_paths[0]
         if xsrf_token:
             CONFIG["xsrf_token"] = xsrf_token
         if auth_user is not None:
@@ -907,7 +943,13 @@ class GeminiHandler(BaseHTTPRequestHandler):
         CONFIG["account_email"] = None
         CONFIG["account_photo"] = None
 
-        for p in ["gemini-auth.json", "cookie.txt"]:
+        clean_paths = [
+            "gemini-auth.json",
+            "cookie.txt",
+            get_default_auth_path(),
+            os.path.expanduser("~/.config/gemini-web2api/cookie.txt"),
+        ]
+        for p in clean_paths:
             if os.path.exists(p):
                 try:
                     os.remove(p)

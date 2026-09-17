@@ -7,7 +7,7 @@ import argparse
 import webbrowser
 
 from . import __version__
-from .config import CONFIG, load_config, find_config
+from .config import CONFIG, load_config, find_config, find_auth_file, get_default_auth_path
 from .models import MODELS
 from .gemini import get_auth_details, clear_auth
 from .server import GeminiHandler, ThreadedServer
@@ -26,9 +26,14 @@ RESET = "\033[0m"
 
 def print_header():
     auth = get_auth_details()
-    auth_label = f"{GREEN}● Authenticated (Pro Ready){RESET}" if auth.get("pro_ready") else (
-        f"{GREEN}● Authenticated (Standard){RESET}" if auth.get("authenticated") else f"{CYAN}○ Anonymous Mode{RESET}"
-    )
+    if auth.get("pro_ready"):
+        acc_extra = f" ({auth.get('account_email') or auth.get('account_name') or 'Pro Ready'})"
+        auth_label = f"{GREEN}● Authenticated [Pro Ready]{acc_extra}{RESET}"
+    elif auth.get("authenticated"):
+        acc_extra = f" ({auth.get('account_email') or auth.get('account_name') or 'Standard'})"
+        auth_label = f"{GREEN}● Authenticated{acc_extra}{RESET}"
+    else:
+        auth_label = f"{CYAN}○ Anonymous Mode{RESET}"
 
     banner = (
         f"{BOLD}{MAGENTA}" + r"   ____ _____ __  __ ___ _   _ ___   __        _______ ____ ____    _    ____ ___ " + f"\n"
@@ -63,6 +68,8 @@ def cmd_status(args=None):
     print()
     print(f"{BOLD}Authentication:{RESET}")
     print(f"  Session State:   {'AUTHENTICATED' if auth.get('authenticated') else 'ANONYMOUS'}")
+    if auth.get("account_name") or auth.get("account_email"):
+        print(f"  Google Account:  {auth.get('account_name') or 'User'} <{auth.get('account_email') or 'N/A'}>")
     print(f"  Cookie File:     {auth.get('cookie_file') or 'None'}")
     print(f"  Cookie Count:    {auth.get('cookie_count', 0)}")
     print(f"  SAPISID:         {'✓ Present' if auth.get('has_sapisid') else '✗ Missing'}")
@@ -109,26 +116,34 @@ def cmd_login(args=None):
 
 
 def cmd_logout(args=None):
-    """Clear active session and reset to anonymous mode."""
+    """Clear active session and reset to anonymous mode across local and global configs."""
     clear_auth()
-    for p in ["gemini-auth.json", "cookie.txt"]:
+    clean_paths = [
+        "gemini-auth.json",
+        "cookie.txt",
+        get_default_auth_path(),
+        os.path.expanduser("~/.config/gemini-web2api/cookie.txt"),
+    ]
+    for p in clean_paths:
         if os.path.exists(p):
             try:
                 os.remove(p)
             except:
                 pass
-    cfg_path = find_config()
-    if cfg_path and os.path.exists(cfg_path):
-        try:
-            with open(cfg_path, "r") as f:
-                cfg_data = json.load(f)
-            cfg_data["cookie_file"] = None
-            cfg_data["xsrf_token"] = None
-            cfg_data["auth_user"] = None
-            with open(cfg_path, "w") as f:
-                json.dump(cfg_data, f, indent=2)
-        except:
-            pass
+    for cfg_p in ["./config.json", os.path.expanduser("~/.config/gemini-web2api/config.json")]:
+        if os.path.exists(cfg_p):
+            try:
+                with open(cfg_p, "r") as f:
+                    cfg_data = json.load(f)
+                cfg_data["cookie_file"] = None
+                cfg_data["xsrf_token"] = None
+                cfg_data["auth_user"] = None
+                cfg_data["account_name"] = None
+                cfg_data["account_email"] = None
+                with open(cfg_p, "w") as f:
+                    json.dump(cfg_data, f, indent=2)
+            except:
+                pass
     print(f"\n{GREEN}✓ Logged out successfully. Server reset to Anonymous mode.{RESET}\n")
 
 

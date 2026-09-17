@@ -355,14 +355,29 @@ def run_login_flow(
             print("[!] Failed to capture complete Gemini credentials within the timeout period.")
             return False
 
-        # Write to output file
+        # Write to output file and persistent global user config
         auth_file_path = os.path.abspath(output_file)
-        with open(auth_file_path, "w") as f:
-            json.dump(auth_data, f, indent=2)
+        global_auth_path = os.path.expanduser("~/.config/gemini-web2api/gemini-auth.json")
+        os.makedirs(os.path.dirname(global_auth_path), exist_ok=True)
 
-        # Also write cookie.txt for compatibility
-        with open("cookie.txt", "w") as f:
-            f.write(auth_data["cookie"] + "\n")
+        for p in set([auth_file_path, global_auth_path]):
+            try:
+                with open(p, "w") as f:
+                    json.dump(auth_data, f, indent=2)
+            except Exception as e:
+                print(f"[!] Warning: Could not write {p}: {e}")
+
+        # Also write cookie.txt for compatibility in both locations
+        cookie_text_paths = [
+            os.path.abspath("cookie.txt"),
+            os.path.expanduser("~/.config/gemini-web2api/cookie.txt")
+        ]
+        for cp in cookie_text_paths:
+            try:
+                with open(cp, "w") as f:
+                    f.write(auth_data["cookie"] + "\n")
+            except Exception:
+                pass
 
         print("\n" + "=" * 65)
         print(" ✅ AUTHENTICATION SUCCESSFUL!")
@@ -371,7 +386,7 @@ def run_login_flow(
             acc_str = f"{auth_data.get('account_name') or ''} <{auth_data.get('account_email') or ''}>".strip()
             print(f" Google Account:     {acc_str}")
         print(f" Saved auth file:    {auth_file_path}")
-        print(f" Saved cookie text:  {os.path.abspath('cookie.txt')}")
+        print(f" Global config auth: {global_auth_path}")
         print(f" Google Cookies:     {auth_data.get('cookie_count', 0)} captured")
         print(f" SAPISID:            Present")
         print(f" XSRF (SNlM0e):      {auth_data.get('xsrf_token')[:16]}...")
@@ -379,7 +394,7 @@ def run_login_flow(
         print(f" Auth User Index:    {auth_data.get('auth_user') or '0 (default)'}")
         print("=" * 65)
 
-        # Update config.json if it exists
+        # Update config.json if it exists in local or global paths
         for cfg_p in ["./config.json", os.path.expanduser("~/.config/gemini-web2api/config.json")]:
             if os.path.exists(cfg_p):
                 try:
@@ -392,6 +407,10 @@ def run_login_flow(
                         cfg["auth_user"] = auth_data["auth_user"]
                     if auth_data.get("gemini_bl"):
                         cfg["gemini_bl"] = auth_data["gemini_bl"]
+                    if auth_data.get("account_name"):
+                        cfg["account_name"] = auth_data["account_name"]
+                    if auth_data.get("account_email"):
+                        cfg["account_email"] = auth_data["account_email"]
                     with open(cfg_p, "w") as f:
                         json.dump(cfg, f, indent=2)
                     print(f" [*] Automatically updated {cfg_p}")
@@ -427,13 +446,19 @@ def run_login_flow(
 
 
 def check_auth_status(auth_file: str = "gemini-auth.json") -> dict:
-    """Validate existing auth file without opening browser."""
-    if not os.path.exists(auth_file):
-        print(f"[!] Auth file '{auth_file}' not found.")
-        return {"valid": False, "error": "file not found"}
+    """Validate existing auth file without opening browser with auto-discovery."""
+    target_file = auth_file
+    if not os.path.exists(target_file):
+        # Auto-discover in standard locations
+        global_p = os.path.expanduser("~/.config/gemini-web2api/gemini-auth.json")
+        if os.path.exists(global_p):
+            target_file = global_p
+        else:
+            print(f"[!] Auth file '{auth_file}' not found.")
+            return {"valid": False, "error": "file not found"}
 
     try:
-        with open(auth_file, "r") as f:
+        with open(target_file, "r") as f:
             data = json.load(f)
         cookie_str = data.get("cookie", "")
         sapisid = data.get("sapisid", "")
@@ -445,7 +470,7 @@ def check_auth_status(auth_file: str = "gemini-auth.json") -> dict:
         print("=" * 55)
         print(" Gemini Auth Status Check")
         print("=" * 55)
-        print(f" File:         {os.path.abspath(auth_file)}")
+        print(f" File:         {os.path.abspath(target_file)}")
         if data.get("account_name") or data.get("account_email"):
             print(f" Account:      {data.get('account_name') or ''} <{data.get('account_email') or ''}>".strip())
         print(f" Cookie:       {'✓ Present' if cookie_str else '✗ Missing'}")

@@ -179,6 +179,44 @@ class DashboardAndAuthTests(unittest.TestCase):
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
+    def test_find_auth_file_discovery(self):
+        from gemini_web2api.config import find_auth_file
+        # With no files, returns None
+        CONFIG["cookie_file"] = None
+        self.assertIsNone(find_auth_file())
+
+        # When local gemini-auth.json is created
+        test_file = "gemini-auth.json"
+        with open(test_file, "w") as f:
+            json.dump({"cookie": "SAPISID=discovered; __Secure-1PSID=disc", "sapisid": "discovered"}, f)
+
+        try:
+            found = find_auth_file()
+            self.assertIsNotNone(found)
+            self.assertTrue(found.endswith("gemini-auth.json"))
+
+            # load_cookie should auto-discover without setting cookie_file in advance
+            CONFIG["cookie_file"] = None
+            cookie_str, sapisid = load_cookie()
+            self.assertEqual(sapisid, "discovered")
+            self.assertIn("SAPISID=discovered", cookie_str)
+        finally:
+            if os.path.exists(test_file):
+                os.remove(test_file)
+
+    def test_multi_turn_prompt_formatting(self):
+        from gemini_web2api.tools import messages_to_prompt
+        messages = [
+            {"role": "user", "content": "What is 2+2?"},
+            {"role": "assistant", "content": "2+2 is 4."},
+            {"role": "user", "content": "Multiply that by 10."}
+        ]
+        prompt, images = messages_to_prompt(messages)
+        self.assertIn("What is 2+2?", prompt)
+        self.assertIn("[Assistant]: 2+2 is 4.", prompt)
+        self.assertIn("Multiply that by 10.", prompt)
+        self.assertEqual(images, [])
+
 
 if __name__ == "__main__":
     unittest.main()

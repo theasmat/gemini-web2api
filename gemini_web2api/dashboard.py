@@ -745,16 +745,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
           <div class="form-group">
             <label class="form-label">User Prompt</label>
-            <textarea class="form-textarea" id="play-prompt" placeholder="Ask Gemini anything... e.g. 'Explain the theory of relativity in 3 concise bullet points.'"></textarea>
+            <textarea class="form-textarea" id="play-prompt" placeholder="Ask Gemini anything... e.g. 'Explain quantum computing in simple terms.'"></textarea>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+            <label style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--text-muted); cursor: pointer;">
+              <input type="checkbox" id="play-stateful" checked style="accent-color: var(--primary);">
+              <span>Keep Conversation History (Stateful Chat)</span>
+            </label>
+            <span id="play-turn-count" style="font-size: 0.75rem; color: var(--accent-blue); font-family: 'JetBrains Mono', monospace;">0 turns</span>
           </div>
           <div style="display: flex; gap: 8px;">
             <button class="btn btn-primary" id="btn-send-chat" onclick="sendPlaygroundChat()" style="flex: 1;">🚀 Send (Streaming)</button>
-            <button class="btn btn-secondary" onclick="clearPlayground()">Clear</button>
+            <button class="btn btn-secondary" onclick="clearPlayground()">Clear History</button>
           </div>
         </div>
 
         <div class="card chat-output-card">
-          <span class="card-title">Model Response</span>
+          <div class="card-header">
+            <span class="card-title">Conversation Stream</span>
+            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="clearPlayground()">🗑️ Reset</button>
+          </div>
           <div class="chat-output" id="play-output">Response will appear here in real time...</div>
           <div class="output-meta">
             <span id="output-latency">Latency: -- ms</span>
@@ -1041,20 +1051,77 @@ gemini</code></pre>
     }
 
 
+    let playgroundHistory = [];
+
+    function escapeHtml(text) {
+      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+      return String(text).replace(/[&<>"']/g, m => map[m]);
+    }
+
+    function renderPlaygroundHistory(currentStreamText = '') {
+      const outputEl = document.getElementById('play-output');
+      const turnCountEl = document.getElementById('play-turn-count');
+
+      if (playgroundHistory.length === 0 && !currentStreamText) {
+        outputEl.innerHTML = '<span style="color: var(--text-muted);">Response will appear here in real time...</span>';
+        if (turnCountEl) turnCountEl.textContent = '0 turns';
+        return;
+      }
+
+      let html = '';
+      for (const msg of playgroundHistory) {
+        if (msg.role === 'user') {
+          html += `
+            <div style="margin-bottom: 12px; padding: 10px 14px; background: rgba(99, 102, 241, 0.12); border-left: 3px solid var(--primary); border-radius: 6px;">
+              <div style="font-size: 0.72rem; font-weight: 700; color: #818cf8; margin-bottom: 4px; font-family: 'JetBrains Mono', monospace;">👤 YOU</div>
+              <div style="white-space: pre-wrap; font-size: 0.88rem;">${escapeHtml(msg.content)}</div>
+            </div>`;
+        } else if (msg.role === 'assistant') {
+          html += `
+            <div style="margin-bottom: 14px; padding: 12px 14px; background: rgba(0, 0, 0, 0.25); border-left: 3px solid var(--accent-blue); border-radius: 6px;">
+              <div style="font-size: 0.72rem; font-weight: 700; color: #38bdf8; margin-bottom: 4px; font-family: 'JetBrains Mono', monospace;">✦ GEMINI</div>
+              <div style="white-space: pre-wrap; font-size: 0.88rem; line-height: 1.6;">${escapeHtml(msg.content)}</div>
+            </div>`;
+        }
+      }
+
+      if (currentStreamText) {
+        html += `
+          <div style="margin-bottom: 14px; padding: 12px 14px; background: rgba(0, 0, 0, 0.25); border-left: 3px solid var(--accent-blue); border-radius: 6px;">
+            <div style="font-size: 0.72rem; font-weight: 700; color: #38bdf8; margin-bottom: 4px; font-family: 'JetBrains Mono', monospace;">✦ GEMINI (Streaming...)</div>
+            <div style="white-space: pre-wrap; font-size: 0.88rem; line-height: 1.6;">${escapeHtml(currentStreamText)}</div>
+          </div>`;
+      }
+
+      outputEl.innerHTML = html;
+      outputEl.scrollTop = outputEl.scrollHeight;
+      if (turnCountEl) turnCountEl.textContent = `${Math.floor(playgroundHistory.length / 2)} turns`;
+    }
+
     async function sendPlaygroundChat() {
       const model = document.getElementById('play-model').value + document.getElementById('play-think').value;
-      const prompt = document.getElementById('play-prompt').value.trim();
+      const promptInput = document.getElementById('play-prompt');
+      const prompt = promptInput.value.trim();
       const outputEl = document.getElementById('play-output');
       const sendBtn = document.getElementById('btn-send-chat');
+      const isStateful = document.getElementById('play-stateful')?.checked ?? true;
 
       if (!prompt) {
         alert('Please enter a prompt');
         return;
       }
 
-      outputEl.textContent = 'Thinking and streaming response...';
+      if (!isStateful) {
+        playgroundHistory = [];
+      }
+
+      playgroundHistory.push({ role: 'user', content: prompt });
+      promptInput.value = '';
+      renderPlaygroundHistory('Thinking and streaming response...');
+
       sendBtn.disabled = true;
       const startTime = performance.now();
+      let promptTokens = Math.ceil(prompt.length / 4);
 
       try {
         const res = await fetch('/v1/chat/completions', {
@@ -1065,28 +1132,28 @@ gemini</code></pre>
           },
           body: JSON.stringify({
             model: model,
-            messages: [{ role: 'user', content: prompt }],
+            messages: isStateful ? playgroundHistory : [{ role: 'user', content: prompt }],
             stream: true
           })
         });
 
         if (!res.ok) {
           const err = await res.json();
-          outputEl.textContent = 'Error: ' + (err.error?.message || JSON.stringify(err));
+          const errText = 'Error: ' + (err.error?.message || JSON.stringify(err));
+          playgroundHistory.push({ role: 'assistant', content: errText });
+          renderPlaygroundHistory();
           return;
         }
 
-        outputEl.textContent = '';
         const reader = res.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let fullText = '';
-        let promptTokens = Math.ceil(prompt.length / 4);
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\\n');
+          const lines = chunk.split('\n');
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               const dataStr = line.slice(6).trim();
@@ -1095,27 +1162,31 @@ gemini</code></pre>
                 const json = JSON.parse(dataStr);
                 const delta = json.choices?.[0]?.delta?.content || '';
                 fullText += delta;
-                outputEl.textContent = fullText;
-                outputEl.scrollTop = outputEl.scrollHeight;
+                renderPlaygroundHistory(fullText);
               } catch (e) {}
             }
           }
         }
+
+        playgroundHistory.push({ role: 'assistant', content: fullText });
+        renderPlaygroundHistory();
 
         const duration = Math.round(performance.now() - startTime);
         document.getElementById('output-latency').textContent = `Latency: ${duration} ms`;
         document.getElementById('output-tokens').textContent = `Tokens: ~${promptTokens} prompt / ~${Math.ceil(fullText.length / 4)} completion`;
         refreshLogs();
       } catch (err) {
-        outputEl.textContent = 'Network error: ' + err.message;
+        playgroundHistory.push({ role: 'assistant', content: 'Network error: ' + err.message });
+        renderPlaygroundHistory();
       } finally {
         sendBtn.disabled = false;
       }
     }
 
     function clearPlayground() {
+      playgroundHistory = [];
       document.getElementById('play-prompt').value = '';
-      document.getElementById('play-output').textContent = 'Response will appear here in real time...';
+      renderPlaygroundHistory();
     }
 
     async function refreshLogs() {

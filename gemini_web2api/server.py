@@ -8,7 +8,7 @@ from socketserver import ThreadingMixIn
 
 import os
 import threading
-from .config import CONFIG, find_config
+from .config import CONFIG, find_config, find_auth_file, get_default_auth_path, get_global_config_dir
 from .models import MODELS, resolve_model
 from .gemini import generate, generate_stream, log, get_auth_details, clear_auth, HAS_HTTPX
 from .dashboard import render_dashboard
@@ -310,16 +310,21 @@ class GeminiHandler(BaseHTTPRequestHandler):
             "account_photo": account_photo
         }
 
-        # Save to gemini-auth.json
-        auth_file_path = os.path.abspath("gemini-auth.json")
-        try:
-            with open(auth_file_path, "w") as f:
-                json.dump(auth_payload, f, indent=2)
-        except Exception as e:
-            log(f"Error saving gemini-auth.json: {e}")
+        # Save to both local directory and global persistent user config directory
+        save_paths = [
+            os.path.abspath("gemini-auth.json"),
+            get_default_auth_path()
+        ]
+        for p in save_paths:
+            try:
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                with open(p, "w") as f:
+                    json.dump(auth_payload, f, indent=2)
+            except Exception as e:
+                log(f"Error saving {p}: {e}")
 
         # Update in-memory config
-        CONFIG["cookie_file"] = auth_file_path
+        CONFIG["cookie_file"] = save_paths[0]
         if xsrf_token:
             CONFIG["xsrf_token"] = xsrf_token
         if auth_user is not None:
@@ -333,27 +338,27 @@ class GeminiHandler(BaseHTTPRequestHandler):
         if account_photo is not None:
             CONFIG["account_photo"] = account_photo
 
-        # Persist to config.json if present
-        cfg_path = find_config()
-        if cfg_path and os.path.exists(cfg_path):
-            try:
-                with open(cfg_path, "r") as f:
-                    cfg_data = json.load(f)
-                cfg_data["cookie_file"] = auth_file_path
-                if xsrf_token:
-                    cfg_data["xsrf_token"] = xsrf_token
-                if auth_user is not None:
-                    cfg_data["auth_user"] = auth_user
-                if gemini_bl:
-                    cfg_data["gemini_bl"] = gemini_bl
-                if account_name is not None:
-                    cfg_data["account_name"] = account_name
-                if account_email is not None:
-                    cfg_data["account_email"] = account_email
-                with open(cfg_path, "w") as f:
-                    json.dump(cfg_data, f, indent=2)
-            except Exception as e:
-                log(f"Error updating config.json: {e}")
+        # Persist to config.json in all standard locations
+        for cfg_p in ["./config.json", os.path.expanduser("~/.config/gemini-web2api/config.json")]:
+            if os.path.exists(cfg_p):
+                try:
+                    with open(cfg_p, "r") as f:
+                        cfg_data = json.load(f)
+                    cfg_data["cookie_file"] = save_paths[0]
+                    if xsrf_token:
+                        cfg_data["xsrf_token"] = xsrf_token
+                    if auth_user is not None:
+                        cfg_data["auth_user"] = auth_user
+                    if gemini_bl:
+                        cfg_data["gemini_bl"] = gemini_bl
+                    if account_name is not None:
+                        cfg_data["account_name"] = account_name
+                    if account_email is not None:
+                        cfg_data["account_email"] = account_email
+                    with open(cfg_p, "w") as f:
+                        json.dump(cfg_data, f, indent=2)
+                except Exception as e:
+                    log(f"Error updating {cfg_p}: {e}")
 
         log("Successfully synced authentication session.")
         self.send_json({
@@ -366,27 +371,35 @@ class GeminiHandler(BaseHTTPRequestHandler):
         """Clear active authentication session and reset to anonymous mode."""
         clear_auth()
 
-        # Remove or clear gemini-auth.json and cookie.txt if present
-        for p in ["gemini-auth.json", "cookie.txt"]:
+        # Remove or clear gemini-auth.json and cookie.txt across local and global locations
+        clean_paths = [
+            "gemini-auth.json",
+            "cookie.txt",
+            get_default_auth_path(),
+            os.path.expanduser("~/.config/gemini-web2api/cookie.txt"),
+        ]
+        for p in clean_paths:
             if os.path.exists(p):
                 try:
                     os.remove(p)
                 except Exception as e:
                     log(f"Error removing {p}: {e}")
 
-        # Update config.json to clear cookie_file
-        cfg_path = find_config()
-        if cfg_path and os.path.exists(cfg_path):
-            try:
-                with open(cfg_path, "r") as f:
-                    cfg_data = json.load(f)
-                cfg_data["cookie_file"] = None
-                cfg_data["xsrf_token"] = None
-                cfg_data["auth_user"] = None
-                with open(cfg_path, "w") as f:
-                    json.dump(cfg_data, f, indent=2)
-            except Exception as e:
-                log(f"Error updating config.json: {e}")
+        # Update config.json in all standard locations
+        for cfg_p in ["./config.json", os.path.expanduser("~/.config/gemini-web2api/config.json")]:
+            if os.path.exists(cfg_p):
+                try:
+                    with open(cfg_p, "r") as f:
+                        cfg_data = json.load(f)
+                    cfg_data["cookie_file"] = None
+                    cfg_data["xsrf_token"] = None
+                    cfg_data["auth_user"] = None
+                    cfg_data["account_name"] = None
+                    cfg_data["account_email"] = None
+                    with open(cfg_p, "w") as f:
+                        json.dump(cfg_data, f, indent=2)
+                except Exception as e:
+                    log(f"Error updating {cfg_p}: {e}")
 
         log("Successfully logged out and cleared session.")
         self.send_json({

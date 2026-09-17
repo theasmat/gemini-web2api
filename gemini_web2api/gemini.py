@@ -15,7 +15,7 @@ try:
 except ImportError:
     HAS_HTTPX = False
 
-from .config import CONFIG
+from .config import CONFIG, find_auth_file, get_default_auth_path
 
 _ssl_ctx = None
 _cookie_cache = {"str": "", "sapisid": None, "mtime": 0}
@@ -46,10 +46,14 @@ def _get_httpx_client():
 
 
 def load_cookie() -> tuple:
-    """Load cookie from file with mtime-based caching and dynamic config sync."""
+    """Load cookie from file with mtime-based caching, auto-discovery, and dynamic config sync."""
     cookie_file = CONFIG.get("cookie_file")
     if not cookie_file or not os.path.exists(cookie_file):
-        return "", None
+        cookie_file = find_auth_file()
+        if cookie_file and os.path.exists(cookie_file):
+            CONFIG["cookie_file"] = cookie_file
+        else:
+            return "", None
     try:
         mtime = os.path.getmtime(cookie_file)
         if mtime == _cookie_cache["mtime"] and _cookie_cache["str"]:
