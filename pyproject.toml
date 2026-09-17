@@ -1,0 +1,32 @@
+[project]
+name = "gemini-web2api"
+version = "1.2.0"
+description = "Convert Google Gemini web into OpenAI-compatible API with automated web login and dashboard"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.8"
+dependencies = [
+    "httpx>=0.25.0",
+    "websockets>=12.0",
+]
+
+[project.optional-dependencies]
+playwright = ["playwright>=1.40.0"]
+
+[project.scripts]
+gemini-web2api = "gemini_web2api.cli:main"
+gemini-login = "gemini_web2api.login:main"
+gemini-chat = "gemini_web2api.chat:main"
+
+
+[tool.setuptools.packages.find]
+include = ["gemini_web2api*"]
+
+[tool.setuptools]
+py-modules = ["gemini_login"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+

@@ -1,0 +1,1135 @@
+"""Embedded Web Dashboard for gemini-web2api (/dash)."""
+import json
+
+HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini Web2API Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090c15;
+      --bg-card: rgba(16, 22, 36, 0.75);
+      --bg-card-hover: rgba(22, 30, 48, 0.85);
+      --bg-input: rgba(10, 14, 24, 0.85);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-glow: rgba(99, 102, 241, 0.35);
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --accent-blue: #38bdf8;
+      --accent-purple: #a855f7;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --radius: 14px;
+      --radius-sm: 8px;
+      --shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(56, 189, 248, 0.08) 0%, transparent 40%);
+      background-attachment: fixed;
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+    }
+
+    /* Navbar */
+    header {
+      background: rgba(9, 12, 21, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      padding: 14px 28px;
+    }
+
+    .nav-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .brand-logo {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #6366f1, #38bdf8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 20px;
+      color: white;
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+    }
+
+    .brand-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(90deg, #fff, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .version-tag {
+      font-size: 0.72rem;
+      padding: 2px 7px;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 6px;
+      color: var(--accent-blue);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .nav-status {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: #34d399;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 10px #10b981;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.85); }
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+      text-decoration: none;
+      font-family: inherit;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+      color: white;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      border-color: var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Main Container */
+    main {
+      max-width: 1400px;
+      margin: 24px auto;
+      padding: 0 24px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      width: 100%;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .card:hover {
+      border-color: var(--border-glow);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.05rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-badge {
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+
+    .badge-pro {
+      background: rgba(168, 85, 247, 0.15);
+      border: 1px solid rgba(168, 85, 247, 0.35);
+      color: #c084fc;
+    }
+
+    .badge-anon {
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: #38bdf8;
+    }
+
+    .badge-warn {
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      color: #fbbf24;
+    }
+
+    .stat-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    .stat-label { color: var(--text-muted); }
+    .stat-val { font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+
+    .val-ok { color: var(--accent-emerald); }
+    .val-no { color: var(--text-muted); }
+
+    /* Copy box */
+    .copy-box {
+      display: flex;
+      align-items: center;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px 10px;
+      gap: 8px;
+    }
+
+    .copy-text {
+      flex: 1;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      color: var(--accent-blue);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .copy-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      transition: color 0.2s;
+    }
+
+    .copy-btn:hover { color: white; }
+
+    /* Tabs Layout */
+    .tab-bar {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+      margin-top: 10px;
+    }
+
+    .tab-btn {
+      padding: 8px 18px;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .tab-btn.active {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: rgba(99, 102, 241, 0.35);
+      color: white;
+    }
+
+    .tab-btn:hover:not(.active) {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* Playground */
+    .playground-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .playground-container { grid-template-columns: 1fr; }
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .form-label {
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.88rem;
+      transition: border-color 0.2s;
+    }
+
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+    }
+
+    .form-textarea {
+      resize: vertical;
+      min-height: 110px;
+      font-family: inherit;
+    }
+
+    .chat-output-card {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 380px;
+    }
+
+    .chat-output {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: inherit;
+    }
+
+    .output-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Logs Table */
+    .logs-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.83rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .logs-table th, .logs-table td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logs-table th {
+      color: var(--text-muted);
+      font-weight: 500;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .logs-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .badge-200 { color: var(--accent-emerald); }
+    .badge-400, .badge-401 { color: var(--accent-amber); }
+    .badge-500, .badge-502 { color: var(--accent-rose); }
+
+    /* Modals */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+    }
+
+    .modal-backdrop.open { display: flex; }
+
+    .modal-box {
+      background: #111728;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 580px;
+      padding: 28px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .modal-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    pre code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      display: block;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      color: #e2e8f0;
+      line-height: 1.4;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 20px;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <header>
+    <div class="nav-container">
+      <div class="brand">
+        <div class="brand-logo">G</div>
+        <div>
+          <div class="brand-title">Gemini Web2API</div>
+        </div>
+        <span class="version-tag" id="ver-tag">v1.2.0</span>
+      </div>
+
+      <div class="nav-status">
+        <div class="status-pill">
+          <div class="status-dot"></div>
+          <span id="server-status-text">Server Active</span>
+        </div>
+        <button class="btn btn-secondary" onclick="openLoginModal()">🔑 Web Login</button>
+        <button class="btn btn-secondary" onclick="openSyncModal()">🔄 Sync JSON</button>
+        <button class="btn btn-secondary" id="btn-nav-logout" onclick="logoutAuth()" style="display: none; border-color: rgba(244, 63, 94, 0.4); color: #fda4af;">🚪 Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Body -->
+  <main>
+
+    <!-- Top Metric Grid -->
+    <div class="grid-3">
+
+      <!-- Auth State Card -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🛡️ Authentication Status</span>
+          <span class="card-badge badge-anon" id="auth-mode-badge">Anonymous</span>
+        </div>
+        <div class="stat-list">
+          <div class="stat-item">
+            <span class="stat-label">Google Session:</span>
+            <span class="stat-val" id="stat-cookie">Checking...</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">SAPISID Hash Auth:</span>
+            <span class="stat-val" id="stat-sapisid">No</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">XSRF Token (SNlM0e):</span>
+            <span class="stat-val" id="stat-xsrf">No</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Account Index (/u/):</span>
+            <span class="stat-val" id="stat-authuser">Default (0)</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Pro Routing:</span>
+            <span class="stat-val" id="stat-pro">Inactive (Flash Mode)</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: auto;">
+          <button class="btn btn-primary" id="btn-card-login" style="flex: 1;" onclick="triggerAutoLogin()">🚀 Launch Login Helper</button>
+          <button class="btn btn-secondary" id="btn-card-logout" style="display: none; border-color: rgba(244, 63, 94, 0.4); color: #fda4af;" onclick="logoutAuth()">🚪 Logout</button>
+        </div>
+      </div>
+
+
+      <!-- Quick Connect Card -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">⚡ OpenAI API Endpoints</span>
+          <span class="card-badge badge-pro">Drop-in</span>
+        </div>
+        <div class="form-group">
+          <span class="form-label">Base URL (OpenAI clients, Cherry Studio, etc.):</span>
+          <div class="copy-box">
+            <span class="copy-text" id="base-url-text">http://localhost:8081/v1</span>
+            <button class="copy-btn" onclick="copyText('base-url-text')">📋</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <span class="form-label">API Key:</span>
+          <div class="copy-box">
+            <span class="copy-text" id="api-key-text">sk-gemini</span>
+            <button class="copy-btn" onclick="copyText('api-key-text')">📋</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <span class="form-label">Top Models:</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            <span class="version-tag">gemini-3.5-flash-thinking</span>
+            <span class="version-tag">gemini-3.6-flash</span>
+            <span class="version-tag">gemini-3.1-pro</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Server Health & Streaming -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">📊 Server Health</span>
+          <span class="card-badge badge-pro" id="streaming-badge">httpx SSE</span>
+        </div>
+        <div class="stat-list">
+          <div class="stat-item">
+            <span class="stat-label">Port & Host:</span>
+            <span class="stat-val" id="stat-host-port">8081 (0.0.0.0)</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Default Model:</span>
+            <span class="stat-val" id="stat-default-model">gemini-3.6-flash</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Temporary Chats:</span>
+            <span class="stat-val" id="stat-temp-chats">Disabled</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Proxy:</span>
+            <span class="stat-val" id="stat-proxy">None</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Total Requests:</span>
+            <span class="stat-val" id="stat-req-count">0</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('playground')">🧪 API Playground</button>
+      <button class="tab-btn" onclick="switchTab('logs')">📜 Live Request Logs</button>
+      <button class="tab-btn" onclick="switchTab('snippets')">💻 Client Snippets</button>
+      <button class="tab-btn" onclick="switchTab('settings')">⚙️ Configuration</button>
+    </div>
+
+    <!-- Tab 1: Playground -->
+    <div id="tab-playground" class="tab-pane active">
+      <div class="playground-container">
+        <div class="card">
+          <span class="card-title">Prompt & Options</span>
+          <div class="form-group">
+            <label class="form-label">Model</label>
+            <select class="form-select" id="play-model">
+              <option value="gemini-3.5-flash-thinking" selected>gemini-3.5-flash-thinking (Deep Reasoning)</option>
+              <option value="gemini-3.6-flash">gemini-3.6-flash (Fast & Accurate)</option>
+              <option value="gemini-3.1-pro">gemini-3.1-pro (Gemini Advanced Pro)</option>
+              <option value="gemini-auto">gemini-auto (Automatic Routing)</option>
+              <option value="gemini-flash-lite">gemini-flash-lite (Lightweight)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Thinking Depth (@think=N suffix)</label>
+            <select class="form-select" id="play-think">
+              <option value="">Default (@think=0 deepest)</option>
+              <option value="@think=0">@think=0 (Maximum thinking output)</option>
+              <option value="@think=2">@think=2 (Medium depth)</option>
+              <option value="@think=4">@think=4 (Fastest response)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">User Prompt</label>
+            <textarea class="form-textarea" id="play-prompt" placeholder="Ask Gemini anything... e.g. 'Explain the theory of relativity in 3 concise bullet points.'"></textarea>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-primary" id="btn-send-chat" onclick="sendPlaygroundChat()" style="flex: 1;">🚀 Send (Streaming)</button>
+            <button class="btn btn-secondary" onclick="clearPlayground()">Clear</button>
+          </div>
+        </div>
+
+        <div class="card chat-output-card">
+          <span class="card-title">Model Response</span>
+          <div class="chat-output" id="play-output">Response will appear here in real time...</div>
+          <div class="output-meta">
+            <span id="output-latency">Latency: -- ms</span>
+            <span id="output-tokens">Tokens: -- prompt / -- completion</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 2: Live Logs -->
+    <div id="tab-logs" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">📜 Real-time API Request Log</span>
+          <button class="btn btn-secondary" onclick="refreshLogs()">🔄 Refresh</button>
+        </div>
+        <div style="overflow-x: auto;">
+          <table class="logs-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Client</th>
+                <th>Method</th>
+                <th>Endpoint</th>
+                <th>Model</th>
+                <th>Status</th>
+                <th>Duration</th>
+              </tr>
+            </thead>
+            <tbody id="logs-table-body">
+              <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No requests logged yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 3: Client Snippets -->
+    <div id="tab-snippets" class="tab-pane">
+      <div class="card">
+        <span class="card-title">Integration Code Snippets</span>
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <div>
+            <div class="form-label" style="margin-bottom: 6px;">Python (OpenAI SDK)</div>
+            <pre><code>from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8081/v1",
+    api_key="sk-gemini"
+)
+
+resp = client.chat.completions.create(
+    model="gemini-3.5-flash-thinking",
+    messages=[{"role": "user", "content": "Hello Gemini!"}]
+)
+print(resp.choices[0].message.content)</code></pre>
+          </div>
+
+          <div>
+            <div class="form-label" style="margin-bottom: 6px;">curl (Bash / macOS / Linux)</div>
+            <pre><code>curl http://localhost:8081/v1/chat/completions \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer sk-gemini" \\
+  -d '{"model":"gemini-3.5-flash-thinking","messages":[{"role":"user","content":"Hello!"}]}'</code></pre>
+          </div>
+
+          <div>
+            <div class="form-label" style="margin-bottom: 6px;">Gemini CLI</div>
+            <pre><code>export GEMINI_API_KEY=none
+export GOOGLE_GEMINI_BASE_URL=http://localhost:8081
+gemini</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 4: Configuration -->
+    <div id="tab-settings" class="tab-pane">
+      <div class="card">
+        <span class="card-title">⚙️ Server Runtime Configuration</span>
+        <div class="form-group">
+          <label class="form-label">Listening Port</label>
+          <input type="number" class="form-input" id="cfg-port" value="8081">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Default Model</label>
+          <input type="text" class="form-input" id="cfg-default-model" value="gemini-3.6-flash">
+        </div>
+        <div class="form-group">
+          <label class="form-label">HTTP Proxy (e.g. http://127.0.0.1:7890)</label>
+          <input type="text" class="form-input" id="cfg-proxy" placeholder="Optional HTTP/HTTPS proxy">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Temporary Chats (Do not save conversations to Google account history)</label>
+          <select class="form-select" id="cfg-temp-chats">
+            <option value="false">Disabled (Conversations persist in history)</option>
+            <option value="true">Enabled (Temporary chats only)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">API Keys (JSON list or comma separated)</label>
+          <input type="text" class="form-input" id="cfg-api-keys" placeholder='e.g. ["sk-gemini"]'>
+        </div>
+        <div>
+          <button class="btn btn-primary" onclick="saveSettings()">Save Configuration</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Login Modal -->
+  <div class="modal-backdrop" id="login-modal">
+    <div class="modal-box">
+      <div class="modal-title">🔑 Google Gemini Web Login</div>
+      <p style="font-size: 0.88rem; color: var(--text-muted);">
+        Run the automated login tool from your terminal or trigger browser authentication.
+      </p>
+
+      <div class="form-group">
+        <span class="form-label">Terminal Command (CLI Automation with uv):</span>
+        <pre><code>uv run python gemini_login.py</code></pre>
+      </div>
+
+      <div style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">
+        This automatically launches Chrome/Edge/Brave/Chromium, waits for you to sign in to your Google Account at <code>gemini.google.com</code>, and extracts your cookies, <code>SAPISID</code>, and <code>SNlM0e</code> XSRF token directly!
+      </div>
+
+      <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px;">
+        <button class="btn btn-secondary" onclick="closeLoginModal()">Close</button>
+        <button class="btn btn-primary" onclick="triggerAutoLogin()">🚀 Launch Login Helper</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sync JSON Modal -->
+  <div class="modal-backdrop" id="sync-modal">
+    <div class="modal-box">
+      <div class="modal-title">🔄 Paste gemini-auth.json</div>
+      <p style="font-size: 0.88rem; color: var(--text-muted);">
+        Paste the contents of <code>gemini-auth.json</code> or browser extension export:
+      </p>
+      <textarea class="form-textarea" id="sync-json-input" placeholder='{"cookie": "...", "sapisid": "...", "xsrf_token": "...", "auth_user": "0"}' style="min-height: 140px; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;"></textarea>
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button class="btn btn-secondary" onclick="closeSyncModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitAuthSync()">Apply & Sync Credentials</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    Gemini Web2API • OpenAI Compatible Proxy Server • Zero Cost • Cross Platform
+  </footer>
+
+  <script>
+    let pollTimer = null;
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch('/api/status');
+        if (!res.ok) return;
+        const data = await res.json();
+        updateUIWithStatus(data);
+      } catch (err) {
+        console.error('Failed to fetch status:', err);
+      }
+    }
+
+    function updateUIWithStatus(data) {
+      if (!data) return;
+      document.getElementById('ver-tag').textContent = 'v' + (data.version || '1.2.0');
+      document.getElementById('base-url-text').textContent = window.location.origin + '/v1';
+      document.getElementById('stat-host-port').textContent = (data.port || 8081) + ' (' + (data.host || '0.0.0.0') + ')';
+      document.getElementById('stat-default-model').textContent = data.default_model || 'gemini-3.6-flash';
+      document.getElementById('stat-temp-chats').textContent = data.temporary_chats ? 'Enabled' : 'Disabled';
+      document.getElementById('stat-proxy').textContent = data.proxy || 'None';
+      document.getElementById('stat-req-count').textContent = data.total_requests || '0';
+
+      const auth = data.auth || {};
+      const modeBadge = document.getElementById('auth-mode-badge');
+      const isAuth = Boolean(auth.authenticated || auth.has_cookie);
+
+      if (auth.pro_ready) {
+        modeBadge.textContent = 'Gemini Advanced (Pro Ready)';
+        modeBadge.className = 'card-badge badge-pro';
+      } else if (auth.authenticated) {
+        modeBadge.textContent = 'Authenticated (Standard)';
+        modeBadge.className = 'card-badge badge-pro';
+      } else {
+        modeBadge.textContent = 'Anonymous Mode';
+        modeBadge.className = 'card-badge badge-anon';
+      }
+
+      // Toggle logout buttons and login button text
+      const navLogout = document.getElementById('btn-nav-logout');
+      const cardLogout = document.getElementById('btn-card-logout');
+      const cardLogin = document.getElementById('btn-card-login');
+
+      if (navLogout) navLogout.style.display = isAuth ? 'inline-flex' : 'none';
+      if (cardLogout) cardLogout.style.display = isAuth ? 'inline-flex' : 'none';
+      if (cardLogin) cardLogin.textContent = isAuth ? '🔄 Refresh Login' : '🚀 Launch Login Helper';
+
+      const cookieVal = document.getElementById('stat-cookie');
+      cookieVal.textContent = auth.has_cookie ? `Present (${auth.cookie_count || 0} cookies)` : 'None';
+      cookieVal.className = 'stat-val ' + (auth.has_cookie ? 'val-ok' : 'val-no');
+
+      const sapisidVal = document.getElementById('stat-sapisid');
+      sapisidVal.textContent = auth.has_sapisid ? 'Valid' : 'None';
+      sapisidVal.className = 'stat-val ' + (auth.has_sapisid ? 'val-ok' : 'val-no');
+
+      const xsrfVal = document.getElementById('stat-xsrf');
+      xsrfVal.textContent = auth.has_xsrf ? 'Valid' : 'None';
+      xsrfVal.className = 'stat-val ' + (auth.has_xsrf ? 'val-ok' : 'val-no');
+
+      document.getElementById('stat-authuser').textContent = auth.auth_user !== null ? `/u/${auth.auth_user}` : 'Default (0)';
+      
+      const proVal = document.getElementById('stat-pro');
+      proVal.textContent = auth.pro_ready ? 'Active (Pro Enabled)' : 'Fallback to Flash';
+      proVal.className = 'stat-val ' + (auth.pro_ready ? 'val-ok' : 'val-no');
+
+      if (data.api_keys && data.api_keys.length > 0) {
+        document.getElementById('api-key-text').textContent = data.api_keys[0];
+      } else {
+        document.getElementById('api-key-text').textContent = 'None (Auth Disabled)';
+      }
+    }
+
+    async function logoutAuth() {
+      if (!confirm('Are you sure you want to log out and clear all saved Google Gemini session credentials?')) return;
+      try {
+        const res = await fetch('/api/auth/logout', { method: 'POST' });
+        const result = await res.json();
+        alert(result.message || 'Logged out successfully. Server reset to Anonymous mode.');
+        fetchStatus();
+      } catch (err) {
+        alert('Logout failed: ' + err.message);
+      }
+    }
+
+
+    async function sendPlaygroundChat() {
+      const model = document.getElementById('play-model').value + document.getElementById('play-think').value;
+      const prompt = document.getElementById('play-prompt').value.trim();
+      const outputEl = document.getElementById('play-output');
+      const sendBtn = document.getElementById('btn-send-chat');
+
+      if (!prompt) {
+        alert('Please enter a prompt');
+        return;
+      }
+
+      outputEl.textContent = 'Thinking and streaming response...';
+      sendBtn.disabled = true;
+      const startTime = performance.now();
+
+      try {
+        const res = await fetch('/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + document.getElementById('api-key-text').textContent
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [{ role: 'user', content: prompt }],
+            stream: true
+          })
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          outputEl.textContent = 'Error: ' + (err.error?.message || JSON.stringify(err));
+          return;
+        }
+
+        outputEl.textContent = '';
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let fullText = '';
+        let promptTokens = Math.ceil(prompt.length / 4);
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const dataStr = line.slice(6).trim();
+              if (dataStr === '[DONE]') continue;
+              try {
+                const json = JSON.parse(dataStr);
+                const delta = json.choices?.[0]?.delta?.content || '';
+                fullText += delta;
+                outputEl.textContent = fullText;
+                outputEl.scrollTop = outputEl.scrollHeight;
+              } catch (e) {}
+            }
+          }
+        }
+
+        const duration = Math.round(performance.now() - startTime);
+        document.getElementById('output-latency').textContent = `Latency: ${duration} ms`;
+        document.getElementById('output-tokens').textContent = `Tokens: ~${promptTokens} prompt / ~${Math.ceil(fullText.length / 4)} completion`;
+        refreshLogs();
+      } catch (err) {
+        outputEl.textContent = 'Network error: ' + err.message;
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    function clearPlayground() {
+      document.getElementById('play-prompt').value = '';
+      document.getElementById('play-output').textContent = 'Response will appear here in real time...';
+    }
+
+    async function refreshLogs() {
+      try {
+        const res = await fetch('/api/logs');
+        if (!res.ok) return;
+        const logs = await res.json();
+        const tbody = document.getElementById('logs-table-body');
+        if (!logs || logs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No requests logged yet</td></tr>';
+          return;
+        }
+        tbody.innerHTML = logs.map(l => `
+          <tr>
+            <td>${l.time || '-'}</td>
+            <td>${l.client || '-'}</td>
+            <td><strong>${l.method || '-'}</strong></td>
+            <td>${l.path || '-'}</td>
+            <td>${l.model || '-'}</td>
+            <td><span class="badge-${l.status || 200}">${l.status || 200}</span></td>
+            <td>${l.duration_ms !== undefined ? l.duration_ms + 'ms' : '-'}</td>
+          </tr>
+        `).join('');
+      } catch (e) {}
+    }
+
+    async function submitAuthSync() {
+      const input = document.getElementById('sync-json-input').value.trim();
+      if (!input) return;
+      try {
+        const payload = JSON.parse(input);
+        const res = await fetch('/v1/auth/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (res.ok) {
+          alert('Authentication synced successfully!');
+          closeSyncModal();
+          fetchStatus();
+        } else {
+          alert('Sync failed: ' + (result.error?.message || JSON.stringify(result)));
+        }
+      } catch (e) {
+        alert('Invalid JSON: ' + e.message);
+      }
+    }
+
+    async function triggerAutoLogin() {
+      try {
+        const res = await fetch('/api/auth/login', { method: 'POST' });
+        const data = await res.json();
+        alert(data.message || 'Login automation launched in background! Please check the opened browser.');
+        closeLoginModal();
+      } catch (e) {
+        alert('Could not trigger auto login: ' + e.message + '\\nYou can run: uv run python gemini_login.py in your terminal.');
+      }
+    }
+
+    async function saveSettings() {
+      const port = parseInt(document.getElementById('cfg-port').value, 10);
+      const defaultModel = document.getElementById('cfg-default-model').value.trim();
+      const proxy = document.getElementById('cfg-proxy').value.trim() || null;
+      const tempChats = document.getElementById('cfg-temp-chats').value === 'true';
+      const apiKeysRaw = document.getElementById('cfg-api-keys').value.trim();
+
+      let apiKeys = [];
+      if (apiKeysRaw) {
+        try {
+          apiKeys = JSON.parse(apiKeysRaw);
+        } catch {
+          apiKeys = apiKeysRaw.split(',').map(s => s.trim()).filter(Boolean);
+        }
+      }
+
+      try {
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            port: port,
+            default_model: defaultModel,
+            proxy: proxy,
+            temporary_chats: tempChats,
+            api_keys: apiKeys
+          })
+        });
+        if (res.ok) {
+          alert('Configuration updated successfully!');
+          fetchStatus();
+        } else {
+          const err = await res.json();
+          alert('Failed to save config: ' + (err.error?.message || JSON.stringify(err)));
+        }
+      } catch (e) {
+        alert('Error saving config: ' + e.message);
+      }
+    }
+
+    function switchTab(name) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      if (event && event.target) event.target.classList.add('active');
+      const pane = document.getElementById('tab-' + name);
+      if (pane) pane.classList.add('active');
+      if (name === 'logs') refreshLogs();
+    }
+
+    function copyText(id) {
+      const text = document.getElementById(id).textContent;
+      navigator.clipboard.writeText(text);
+      alert('Copied: ' + text);
+    }
+
+    function openLoginModal() { document.getElementById('login-modal').classList.add('open'); }
+    function closeLoginModal() { document.getElementById('login-modal').classList.remove('open'); }
+    function openSyncModal() { document.getElementById('sync-modal').classList.add('open'); }
+    function closeSyncModal() { document.getElementById('sync-modal').classList.remove('open'); }
+
+    // Init
+    fetchStatus();
+    pollTimer = setInterval(fetchStatus, 5000);
+  </script>
+</body>
+</html>
+"""
+
+def render_dashboard() -> str:
+    """Return the standalone dashboard HTML."""
+    return HTML_TEMPLATE
