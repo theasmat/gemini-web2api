@@ -119,7 +119,7 @@ def log(msg: str):
 
 def get_global_config_dir() -> str:
     """Return persistent global configuration directory."""
-    base = os.path.expanduser("~/.config/gemini-web2api")
+    base = os.path.expanduser("~/.gemini-web2api")
     os.makedirs(base, exist_ok=True)
     return base
 
@@ -135,12 +135,12 @@ def find_auth_file():
         return CONFIG["cookie_file"]
     if os.path.exists("./gemini-auth.json"):
         return os.path.abspath("./gemini-auth.json")
-    global_path = os.path.expanduser("~/.config/gemini-web2api/gemini-auth.json")
+    global_path = os.path.expanduser("~/.gemini-web2api/gemini-auth.json")
     if os.path.exists(global_path):
         return global_path
     if os.path.exists("./cookie.txt"):
         return os.path.abspath("./cookie.txt")
-    global_cookie = os.path.expanduser("~/.config/gemini-web2api/cookie.txt")
+    global_cookie = os.path.expanduser("~/.gemini-web2api/cookie.txt")
     if os.path.exists(global_cookie):
         return global_cookie
     return None
@@ -947,7 +947,7 @@ class GeminiHandler(BaseHTTPRequestHandler):
             "gemini-auth.json",
             "cookie.txt",
             get_default_auth_path(),
-            os.path.expanduser("~/.config/gemini-web2api/cookie.txt"),
+            os.path.expanduser("~/.gemini-web2api/cookie.txt"),
         ]
         for p in clean_paths:
             if os.path.exists(p):
@@ -956,7 +956,7 @@ class GeminiHandler(BaseHTTPRequestHandler):
                 except Exception as e:
                     log(f"Error removing {p}: {e}")
 
-        for cfg_p in ["./config.json", os.path.expanduser("~/.config/gemini-web2api/config.json")]:
+        for cfg_p in ["./config.json", os.path.expanduser("~/.gemini-web2api/config.json")]:
             if os.path.exists(cfg_p):
                 try:
                     with open(cfg_p, "r") as f:
@@ -1351,7 +1351,7 @@ def main():
 
     config_path = args.config or os.environ.get("GEMINI_WEB2API_CONFIG")
     if not config_path:
-        for p in ["./config.json", os.path.expanduser("~/.config/gemini-web2api/config.json")]:
+        for p in ["./config.json", os.path.expanduser("~/.gemini-web2api/config.json")]:
             if os.path.exists(p):
                 config_path = p
                 break

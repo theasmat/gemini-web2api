@@ -122,7 +122,7 @@ def cmd_logout(args=None):
         "gemini-auth.json",
         "cookie.txt",
         get_default_auth_path(),
-        os.path.expanduser("~/.config/gemini-web2api/cookie.txt"),
+        os.path.expanduser("~/.gemini-web2api/cookie.txt"),
     ]
     for p in clean_paths:
         if os.path.exists(p):
@@ -130,7 +130,7 @@ def cmd_logout(args=None):
                 os.remove(p)
             except:
                 pass
-    for cfg_p in ["./config.json", os.path.expanduser("~/.config/gemini-web2api/config.json")]:
+    for cfg_p in ["./config.json", os.path.expanduser("~/.gemini-web2api/config.json")]:
         if os.path.exists(cfg_p):
             try:
                 with open(cfg_p, "r") as f:

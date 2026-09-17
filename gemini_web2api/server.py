@@ -339,7 +339,7 @@ class GeminiHandler(BaseHTTPRequestHandler):
             CONFIG["account_photo"] = account_photo
 
         # Persist to config.json in all standard locations
-        for cfg_p in ["./config.json", os.path.expanduser("~/.config/gemini-web2api/config.json")]:
+        for cfg_p in ["./config.json", os.path.expanduser("~/.gemini-web2api/config.json")]:
             if os.path.exists(cfg_p):
                 try:
                     with open(cfg_p, "r") as f:
@@ -376,7 +376,7 @@ class GeminiHandler(BaseHTTPRequestHandler):
             "gemini-auth.json",
             "cookie.txt",
             get_default_auth_path(),
-            os.path.expanduser("~/.config/gemini-web2api/cookie.txt"),
+            os.path.expanduser("~/.gemini-web2api/cookie.txt"),
         ]
         for p in clean_paths:
             if os.path.exists(p):
@@ -386,7 +386,7 @@ class GeminiHandler(BaseHTTPRequestHandler):
                     log(f"Error removing {p}: {e}")
 
         # Update config.json in all standard locations
-        for cfg_p in ["./config.json", os.path.expanduser("~/.config/gemini-web2api/config.json")]:
+        for cfg_p in ["./config.json", os.path.expanduser("~/.gemini-web2api/config.json")]:
             if os.path.exists(cfg_p):
                 try:
                     with open(cfg_p, "r") as f:

@@ -27,7 +27,7 @@ CONFIG = dict(DEFAULT_CONFIG)
 
 def get_global_config_dir() -> str:
     """Return persistent global configuration directory."""
-    base = os.path.expanduser("~/.config/gemini-web2api")
+    base = os.path.expanduser("~/.gemini-web2api")
     os.makedirs(base, exist_ok=True)
     return base
 
@@ -53,14 +53,14 @@ def find_auth_file():
     if os.path.exists("./gemini-auth.json"):
         return os.path.abspath("./gemini-auth.json")
     # 3. Global persistent user config
-    global_path = os.path.expanduser("~/.config/gemini-web2api/gemini-auth.json")
+    global_path = os.path.expanduser("~/.gemini-web2api/gemini-auth.json")
     if os.path.exists(global_path):
         return global_path
     # 4. Local cookie.txt
     if os.path.exists("./cookie.txt"):
         return os.path.abspath("./cookie.txt")
     # 5. Global cookie.txt
-    global_cookie = os.path.expanduser("~/.config/gemini-web2api/cookie.txt")
+    global_cookie = os.path.expanduser("~/.gemini-web2api/cookie.txt")
     if os.path.exists(global_cookie):
         return global_cookie
     return None
@@ -82,7 +82,7 @@ def load_config(path: str = None):
 
 def find_config():
     """Search for config file in standard locations."""
-    for p in ["./config.json", os.path.expanduser("~/.config/gemini-web2api/config.json")]:
+    for p in ["./config.json", os.path.expanduser("~/.gemini-web2api/config.json")]:
         if os.path.exists(p):
             return p
     return None

@@ -92,7 +92,7 @@ def find_browser_executable() -> Optional[str]:
 
 def get_default_profile_dir() -> str:
     """Return persistent browser profile directory."""
-    base = os.path.expanduser("~/.config/gemini-web2api/browser_profile")
+    base = os.path.expanduser("~/.gemini-web2api/browser_profile")
     os.makedirs(base, exist_ok=True)
     return base
 
@@ -357,7 +357,7 @@ def run_login_flow(
 
         # Write to output file and persistent global user config
         auth_file_path = os.path.abspath(output_file)
-        global_auth_path = os.path.expanduser("~/.config/gemini-web2api/gemini-auth.json")
+        global_auth_path = os.path.expanduser("~/.gemini-web2api/gemini-auth.json")
         os.makedirs(os.path.dirname(global_auth_path), exist_ok=True)
 
         for p in set([auth_file_path, global_auth_path]):
@@ -370,7 +370,7 @@ def run_login_flow(
         # Also write cookie.txt for compatibility in both locations
         cookie_text_paths = [
             os.path.abspath("cookie.txt"),
-            os.path.expanduser("~/.config/gemini-web2api/cookie.txt")
+            os.path.expanduser("~/.gemini-web2api/cookie.txt")
         ]
         for cp in cookie_text_paths:
             try:
@@ -395,7 +395,7 @@ def run_login_flow(
         print("=" * 65)
 
         # Update config.json if it exists in local or global paths
-        for cfg_p in ["./config.json", os.path.expanduser("~/.config/gemini-web2api/config.json")]:
+        for cfg_p in ["./config.json", os.path.expanduser("~/.gemini-web2api/config.json")]:
             if os.path.exists(cfg_p):
                 try:
                     with open(cfg_p, "r") as f:
@@ -450,7 +450,7 @@ def check_auth_status(auth_file: str = "gemini-auth.json") -> dict:
     target_file = auth_file
     if not os.path.exists(target_file):
         # Auto-discover in standard locations
-        global_p = os.path.expanduser("~/.config/gemini-web2api/gemini-auth.json")
+        global_p = os.path.expanduser("~/.gemini-web2api/gemini-auth.json")
         if os.path.exists(global_p):
             target_file = global_p
         else:
