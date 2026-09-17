@@ -143,6 +143,59 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       50% { opacity: 0.5; transform: scale(0.85); }
     }
 
+    /* User Profile Pill */
+    .user-pill {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 14px 4px 6px;
+      border-radius: 24px;
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.35);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 2px 10px rgba(99, 102, 241, 0.2);
+    }
+
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1.5px solid var(--accent-blue);
+    }
+
+    .user-avatar-fallback {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #38bdf8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: white;
+      text-transform: uppercase;
+    }
+
+    .user-info {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.2;
+    }
+
+    .user-name {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .user-email {
+      font-size: 0.72rem;
+      color: var(--accent-blue);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
     .btn {
       display: inline-flex;
       align-items: center;
@@ -532,6 +585,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <div class="status-dot"></div>
           <span id="server-status-text">Server Active</span>
         </div>
+        <div class="user-pill" id="nav-user-pill" style="display: none;">
+          <img id="nav-user-avatar" class="user-avatar" src="" alt="Avatar" style="display: none;" />
+          <div id="nav-user-avatar-fallback" class="user-avatar-fallback">👤</div>
+          <div class="user-info">
+            <span class="user-name" id="nav-user-name">Google User</span>
+            <span class="user-email" id="nav-user-email"></span>
+          </div>
+        </div>
         <button class="btn btn-secondary" onclick="openLoginModal()">🔑 Web Login</button>
         <button class="btn btn-secondary" onclick="openSyncModal()">🔄 Sync JSON</button>
         <button class="btn btn-secondary" id="btn-nav-logout" onclick="logoutAuth()" style="display: none; border-color: rgba(244, 63, 94, 0.4); color: #fda4af;">🚪 Logout</button>
@@ -552,6 +613,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <span class="card-badge badge-anon" id="auth-mode-badge">Anonymous</span>
         </div>
         <div class="stat-list">
+          <div class="stat-item" style="background: rgba(99, 102, 241, 0.08); border-color: rgba(99, 102, 241, 0.2);">
+            <span class="stat-label">Google Account:</span>
+            <span class="stat-val" id="stat-account-name">Anonymous</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Account Email:</span>
+            <span class="stat-val" id="stat-account-email">None</span>
+          </div>
           <div class="stat-item">
             <span class="stat-label">Google Session:</span>
             <span class="stat-val" id="stat-cookie">Checking...</span>
@@ -868,6 +937,51 @@ gemini</code></pre>
       const auth = data.auth || {};
       const modeBadge = document.getElementById('auth-mode-badge');
       const isAuth = Boolean(auth.authenticated || auth.has_cookie);
+
+      // Account metadata display
+      const navUserPill = document.getElementById('nav-user-pill');
+      const navUserName = document.getElementById('nav-user-name');
+      const navUserEmail = document.getElementById('nav-user-email');
+      const navUserAvatar = document.getElementById('nav-user-avatar');
+      const navUserFallback = document.getElementById('nav-user-avatar-fallback');
+
+      const statAccountName = document.getElementById('stat-account-name');
+      const statAccountEmail = document.getElementById('stat-account-email');
+
+      if (isAuth) {
+        const accName = auth.account_name || (auth.account_email ? auth.account_email.split('@')[0] : 'Google Account');
+        const accEmail = auth.account_email || '';
+        const accPhoto = auth.account_photo || '';
+
+        statAccountName.textContent = accName;
+        statAccountName.className = 'stat-val val-ok';
+        statAccountEmail.textContent = accEmail || 'Session Linked';
+        statAccountEmail.className = 'stat-val ' + (accEmail ? 'val-ok' : 'val-no');
+
+        if (navUserName) navUserName.textContent = accName;
+        if (navUserEmail) {
+          navUserEmail.textContent = accEmail;
+          navUserEmail.style.display = accEmail ? 'inline' : 'none';
+        }
+        if (navUserAvatar && navUserFallback) {
+          if (accPhoto) {
+            navUserAvatar.src = accPhoto;
+            navUserAvatar.style.display = 'block';
+            navUserFallback.style.display = 'none';
+          } else {
+            navUserAvatar.style.display = 'none';
+            navUserFallback.style.display = 'flex';
+            navUserFallback.textContent = accName.charAt(0).toUpperCase() || '👤';
+          }
+        }
+        if (navUserPill) navUserPill.style.display = 'flex';
+      } else {
+        statAccountName.textContent = 'Anonymous';
+        statAccountName.className = 'stat-val val-no';
+        statAccountEmail.textContent = 'None';
+        statAccountEmail.className = 'stat-val val-no';
+        if (navUserPill) navUserPill.style.display = 'none';
+      }
 
       if (auth.pro_ready) {
         modeBadge.textContent = 'Gemini Advanced (Pro Ready)';

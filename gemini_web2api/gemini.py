@@ -66,6 +66,12 @@ def load_cookie() -> tuple:
                 CONFIG["auth_user"] = data["auth_user"]
             if data.get("gemini_bl"):
                 CONFIG["gemini_bl"] = data["gemini_bl"]
+            if "account_name" in data:
+                CONFIG["account_name"] = data["account_name"]
+            if "account_email" in data:
+                CONFIG["account_email"] = data["account_email"]
+            if "account_photo" in data:
+                CONFIG["account_photo"] = data["account_photo"]
         else:
             cookie_str = content
             pairs = dict(p.split("=", 1) for p in cookie_str.split("; ") if "=" in p)
@@ -86,6 +92,9 @@ def get_auth_details() -> dict:
     has_xsrf = bool(CONFIG.get("xsrf_token"))
     auth_user = CONFIG.get("auth_user")
     gemini_bl = CONFIG.get("gemini_bl")
+    account_name = CONFIG.get("account_name")
+    account_email = CONFIG.get("account_email")
+    account_photo = CONFIG.get("account_photo")
 
     cookie_names = []
     if cookie_str:
@@ -100,6 +109,9 @@ def get_auth_details() -> dict:
         "has_xsrf": has_xsrf,
         "auth_user": auth_user,
         "gemini_bl": gemini_bl,
+        "account_name": account_name,
+        "account_email": account_email,
+        "account_photo": account_photo,
         "cookie_count": len(cookie_names),
         "cookie_names": cookie_names[:10],
         "pro_ready": has_cookie and has_sapisid and has_xsrf,
@@ -115,6 +127,9 @@ def clear_auth():
     CONFIG["cookie_file"] = None
     CONFIG["xsrf_token"] = None
     CONFIG["auth_user"] = None
+    CONFIG["account_name"] = None
+    CONFIG["account_email"] = None
+    CONFIG["account_photo"] = None
 
 
 def make_sapisidhash(sapisid: str) -> str:

@@ -291,6 +291,9 @@ class GeminiHandler(BaseHTTPRequestHandler):
         xsrf_token = req.get("xsrf_token")
         auth_user = req.get("auth_user")
         gemini_bl = req.get("gemini_bl")
+        account_name = req.get("account_name")
+        account_email = req.get("account_email")
+        account_photo = req.get("account_photo")
 
         if not cookie_str and not sapisid:
             self.send_json({"error": {"message": "cookie or sapisid is required"}}, 400)
@@ -301,7 +304,10 @@ class GeminiHandler(BaseHTTPRequestHandler):
             "sapisid": sapisid,
             "auth_user": auth_user,
             "xsrf_token": xsrf_token,
-            "gemini_bl": gemini_bl
+            "gemini_bl": gemini_bl,
+            "account_name": account_name,
+            "account_email": account_email,
+            "account_photo": account_photo
         }
 
         # Save to gemini-auth.json
@@ -320,6 +326,12 @@ class GeminiHandler(BaseHTTPRequestHandler):
             CONFIG["auth_user"] = auth_user
         if gemini_bl:
             CONFIG["gemini_bl"] = gemini_bl
+        if account_name is not None:
+            CONFIG["account_name"] = account_name
+        if account_email is not None:
+            CONFIG["account_email"] = account_email
+        if account_photo is not None:
+            CONFIG["account_photo"] = account_photo
 
         # Persist to config.json if present
         cfg_path = find_config()
@@ -334,6 +346,10 @@ class GeminiHandler(BaseHTTPRequestHandler):
                     cfg_data["auth_user"] = auth_user
                 if gemini_bl:
                     cfg_data["gemini_bl"] = gemini_bl
+                if account_name is not None:
+                    cfg_data["account_name"] = account_name
+                if account_email is not None:
+                    cfg_data["account_email"] = account_email
                 with open(cfg_path, "w") as f:
                     json.dump(cfg_data, f, indent=2)
             except Exception as e:

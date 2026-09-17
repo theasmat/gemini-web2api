@@ -94,7 +94,10 @@ class DashboardAndAuthTests(unittest.TestCase):
             "sapisid": "xyz98765",
             "xsrf_token": "AOOh0P_test_token",
             "auth_user": "1",
-            "gemini_bl": "boq_test_bl"
+            "gemini_bl": "boq_test_bl",
+            "account_name": "Test User",
+            "account_email": "test.user@gmail.com",
+            "account_photo": "https://lh3.googleusercontent.com/a/test_avatar"
         }
         status, headers, body = self._request("POST", "/v1/auth/sync", body=payload)
         self.assertEqual(status, 200)
@@ -102,9 +105,13 @@ class DashboardAndAuthTests(unittest.TestCase):
         self.assertEqual(data["status"], "ok")
         self.assertEqual(data["auth"]["has_sapisid"], True)
         self.assertEqual(data["auth"]["has_xsrf"], True)
+        self.assertEqual(data["auth"]["account_name"], "Test User")
+        self.assertEqual(data["auth"]["account_email"], "test.user@gmail.com")
         self.assertEqual(CONFIG["xsrf_token"], "AOOh0P_test_token")
         self.assertEqual(CONFIG["auth_user"], "1")
         self.assertEqual(CONFIG["gemini_bl"], "boq_test_bl")
+        self.assertEqual(CONFIG["account_name"], "Test User")
+        self.assertEqual(CONFIG["account_email"], "test.user@gmail.com")
 
     def test_post_config_update(self):
         payload = {
@@ -127,7 +134,9 @@ class DashboardAndAuthTests(unittest.TestCase):
                 "sapisid": "dynamic_sapisid",
                 "xsrf_token": "dyn_xsrf_token",
                 "auth_user": "2",
-                "gemini_bl": "dyn_bl"
+                "gemini_bl": "dyn_bl",
+                "account_name": "Dynamic User",
+                "account_email": "dynamic@gmail.com"
             }
             json.dump(auth_json, f)
             temp_path = f.name
@@ -140,11 +149,15 @@ class DashboardAndAuthTests(unittest.TestCase):
             self.assertEqual(CONFIG["xsrf_token"], "dyn_xsrf_token")
             self.assertEqual(CONFIG["auth_user"], "2")
             self.assertEqual(CONFIG["gemini_bl"], "dyn_bl")
+            self.assertEqual(CONFIG["account_name"], "Dynamic User")
+            self.assertEqual(CONFIG["account_email"], "dynamic@gmail.com")
 
             details = get_auth_details()
             self.assertEqual(details["authenticated"], True)
             self.assertEqual(details["has_xsrf"], True)
             self.assertEqual(details["auth_user"], "2")
+            self.assertEqual(details["account_name"], "Dynamic User")
+            self.assertEqual(details["account_email"], "dynamic@gmail.com")
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)

@@ -232,9 +232,48 @@ async function readGeminiPageMetadata(tabs) {
         else if (resourceBl) source = "performance";
         else if (xsrfToken || geminiBl) source = "page-html";
 
+        // Extract account details
+        let accountEmail = null;
+        let accountName = null;
+        let accountPhoto = null;
+
+        const targets = document.querySelectorAll('a[aria-label*="@"], button[aria-label*="@"], a[aria-label*="Google Account"], button[aria-label*="Google Account"], a[href*="SignOutOptions"], a[href*="accounts.google.com"]');
+        for (const el of targets) {
+          const label = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+          const emMatch = label.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+          if (emMatch && !accountEmail) accountEmail = emMatch[1];
+
+          const nmMatch = label.match(/(?:Google Account:\s*)?([^\n(\]]+?)(?:\s*[\n(]\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|\s*$)/i);
+          if (nmMatch && nmMatch[1] && !accountName) {
+            const n = nmMatch[1].trim().replace(/^Google Account:\s*/i, '');
+            if (n && !n.includes('@')) accountName = n;
+          }
+
+          const img = el.querySelector('img') || (el.tagName === 'IMG' ? el : null);
+          if (img && img.src && img.src.includes('googleusercontent.com') && !accountPhoto) {
+            accountPhoto = img.src;
+          }
+        }
+
+        if (!accountPhoto) {
+          const img = document.querySelector('img[src*="googleusercontent.com/a/"], img[src*="googleusercontent.com/ogw/"]');
+          if (img && img.src) accountPhoto = img.src;
+        }
+
+        try {
+          const str = JSON.stringify(wiz);
+          if (!accountEmail) {
+            const em = str.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+            if (em) accountEmail = em[1];
+          }
+        } catch(e) {}
+
         return {
           xsrfToken: xsrfToken || null,
           geminiBl: geminiBl || null,
+          accountName: accountName || null,
+          accountEmail: accountEmail || null,
+          accountPhoto: accountPhoto || null,
           source,
           url: location.href
         };
@@ -244,6 +283,9 @@ async function readGeminiPageMetadata(tabs) {
     return result?.[0]?.result || {
       xsrfToken: null,
       geminiBl: null,
+      accountName: null,
+      accountEmail: null,
+      accountPhoto: null,
       source: null,
       error: "Failed to read Gemini page data."
     };
@@ -251,6 +293,9 @@ async function readGeminiPageMetadata(tabs) {
     return {
       xsrfToken: null,
       geminiBl: null,
+      accountName: null,
+      accountEmail: null,
+      accountPhoto: null,
       source: null,
       error: error?.message || String(error)
     };
@@ -395,7 +440,10 @@ syncServerButton.addEventListener("click", async () => {
       sapisid: info.selected.get("SAPISID").value,
       auth_user: info.authUser,
       xsrf_token: info.pageMetadata.xsrfToken,
-      gemini_bl: info.pageMetadata.geminiBl
+      gemini_bl: info.pageMetadata.geminiBl,
+      account_name: info.pageMetadata.accountName,
+      account_email: info.pageMetadata.accountEmail,
+      account_photo: info.pageMetadata.accountPhoto
     };
 
     const targetUrl = (serverUrlInput.value || "http://127.0.0.1:8081").replace(/\/+$/, "") + "/v1/auth/sync";
@@ -411,8 +459,11 @@ syncServerButton.addEventListener("click", async () => {
       throw new Error(`Server returned HTTP ${resp.status}: ${resJson.error?.message || JSON.stringify(resJson)}`);
     }
 
+    const accInfo = info.pageMetadata.accountEmail ? `Account: ${info.pageMetadata.accountName || ""} <${info.pageMetadata.accountEmail}>\n` : "";
+
     setStatus(
       `⚡ Successfully synced authentication to ${targetUrl}!\n\n` +
+      accInfo +
       `SAPISID: present\n` +
       `XSRF: present\n` +
       `auth_user: ${info.authUser ?? "null"}\n` +
@@ -444,7 +495,10 @@ exportButton.addEventListener("click", async () => {
       sapisid: info.selected.get("SAPISID").value,
       auth_user: info.authUser,
       xsrf_token: info.pageMetadata.xsrfToken,
-      gemini_bl: info.pageMetadata.geminiBl
+      gemini_bl: info.pageMetadata.geminiBl,
+      account_name: info.pageMetadata.accountName,
+      account_email: info.pageMetadata.accountEmail,
+      account_photo: info.pageMetadata.accountPhoto
     };
 
     await downloadJson("gemini-auth.json", payload);

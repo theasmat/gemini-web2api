@@ -63,6 +63,9 @@ DEFAULT_CONFIG = {
     "proxy": None,
     "api_keys": [],
     "temporary_chats": False,
+    "account_name": None,
+    "account_email": None,
+    "account_photo": None,
 }
 
 CONFIG = dict(DEFAULT_CONFIG)
@@ -134,6 +137,12 @@ def load_cookie() -> tuple:
                 CONFIG["auth_user"] = data["auth_user"]
             if data.get("gemini_bl"):
                 CONFIG["gemini_bl"] = data["gemini_bl"]
+            if "account_name" in data:
+                CONFIG["account_name"] = data["account_name"]
+            if "account_email" in data:
+                CONFIG["account_email"] = data["account_email"]
+            if "account_photo" in data:
+                CONFIG["account_photo"] = data["account_photo"]
         else:
             cookie_str = content
             pairs = dict(p.split("=", 1) for p in cookie_str.split("; ") if "=" in p)
@@ -153,6 +162,9 @@ def get_auth_details() -> dict:
     has_xsrf = bool(CONFIG.get("xsrf_token"))
     auth_user = CONFIG.get("auth_user")
     gemini_bl = CONFIG.get("gemini_bl")
+    account_name = CONFIG.get("account_name")
+    account_email = CONFIG.get("account_email")
+    account_photo = CONFIG.get("account_photo")
 
     cookie_names = []
     if cookie_str:
@@ -167,6 +179,9 @@ def get_auth_details() -> dict:
         "has_xsrf": has_xsrf,
         "auth_user": auth_user,
         "gemini_bl": gemini_bl,
+        "account_name": account_name,
+        "account_email": account_email,
+        "account_photo": account_photo,
         "cookie_count": len(cookie_names),
         "cookie_names": cookie_names[:10],
         "pro_ready": has_cookie and has_sapisid and has_xsrf,
@@ -836,6 +851,9 @@ class GeminiHandler(BaseHTTPRequestHandler):
         xsrf_token = req.get("xsrf_token")
         auth_user = req.get("auth_user")
         gemini_bl = req.get("gemini_bl")
+        account_name = req.get("account_name")
+        account_email = req.get("account_email")
+        account_photo = req.get("account_photo")
 
         if not cookie_str and not sapisid:
             self.send_json({"error": {"message": "cookie or sapisid is required"}}, 400)
@@ -846,7 +864,10 @@ class GeminiHandler(BaseHTTPRequestHandler):
             "sapisid": sapisid,
             "auth_user": auth_user,
             "xsrf_token": xsrf_token,
-            "gemini_bl": gemini_bl
+            "gemini_bl": gemini_bl,
+            "account_name": account_name,
+            "account_email": account_email,
+            "account_photo": account_photo
         }
 
         auth_file_path = os.path.abspath("gemini-auth.json")
@@ -863,6 +884,12 @@ class GeminiHandler(BaseHTTPRequestHandler):
             CONFIG["auth_user"] = auth_user
         if gemini_bl:
             CONFIG["gemini_bl"] = gemini_bl
+        if account_name is not None:
+            CONFIG["account_name"] = account_name
+        if account_email is not None:
+            CONFIG["account_email"] = account_email
+        if account_photo is not None:
+            CONFIG["account_photo"] = account_photo
 
         log("Successfully synced authentication session.")
         self.send_json({
@@ -876,6 +903,9 @@ class GeminiHandler(BaseHTTPRequestHandler):
         CONFIG["cookie_file"] = None
         CONFIG["xsrf_token"] = None
         CONFIG["auth_user"] = None
+        CONFIG["account_name"] = None
+        CONFIG["account_email"] = None
+        CONFIG["account_photo"] = None
 
         for p in ["gemini-auth.json", "cookie.txt"]:
             if os.path.exists(p):
@@ -892,6 +922,8 @@ class GeminiHandler(BaseHTTPRequestHandler):
                     cfg_data["cookie_file"] = None
                     cfg_data["xsrf_token"] = None
                     cfg_data["auth_user"] = None
+                    cfg_data["account_name"] = None
+                    cfg_data["account_email"] = None
                     with open(cfg_p, "w") as f:
                         json.dump(cfg_data, f, indent=2)
                 except Exception as e:

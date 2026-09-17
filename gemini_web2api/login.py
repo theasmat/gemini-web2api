@@ -221,10 +221,49 @@ async def extract_session_via_cdp(cdp_port: int, max_wait_sec: int = 180) -> Opt
                 const uMatch = path.match(/^\\/u\\/(\\d+)/);
                 const authUser = uMatch ? uMatch[1] : null;
 
+                // Extract account profile details
+                let accountEmail = null;
+                let accountName = null;
+                let accountPhoto = null;
+
+                const targets = document.querySelectorAll('a[aria-label*="@"], button[aria-label*="@"], a[aria-label*="Google Account"], button[aria-label*="Google Account"], a[href*="SignOutOptions"], a[href*="accounts.google.com"]');
+                for (const el of targets) {
+                    const label = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+                    const emMatch = label.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})/);
+                    if (emMatch && !accountEmail) accountEmail = emMatch[1];
+
+                    const nmMatch = label.match(/(?:Google Account:\\\\s*)?([^\\\\n(\\\\]]+?)(?:\\\\s*[\\\\n(]\\\\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}|\\\\s*$)/i);
+                    if (nmMatch && nmMatch[1] && !accountName) {
+                        const n = nmMatch[1].trim().replace(/^Google Account:\\\\s*/i, '');
+                        if (n && !n.includes('@')) accountName = n;
+                    }
+
+                    const img = el.querySelector('img') || (el.tagName === 'IMG' ? el : null);
+                    if (img && img.src && img.src.includes('googleusercontent.com') && !accountPhoto) {
+                        accountPhoto = img.src;
+                    }
+                }
+
+                if (!accountPhoto) {
+                    const img = document.querySelector('img[src*="googleusercontent.com/a/"], img[src*="googleusercontent.com/ogw/"]');
+                    if (img && img.src) accountPhoto = img.src;
+                }
+
+                try {
+                    const str = JSON.stringify(wiz);
+                    if (!accountEmail) {
+                        const em = str.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})/);
+                        if (em) accountEmail = em[1];
+                    }
+                } catch(e) {}
+
                 return {
                     xsrf_token: xsrf,
                     gemini_bl: bl,
                     auth_user: authUser,
+                    account_name: accountName,
+                    account_email: accountEmail,
+                    account_photo: accountPhoto,
                     url: window.location.href
                 };
             })()
@@ -236,6 +275,9 @@ async def extract_session_via_cdp(cdp_port: int, max_wait_sec: int = 180) -> Opt
             xsrf_token = page_data.get("xsrf_token")
             gemini_bl = page_data.get("gemini_bl")
             auth_user = page_data.get("auth_user")
+            account_name = page_data.get("account_name")
+            account_email = page_data.get("account_email")
+            account_photo = page_data.get("account_photo")
             current_url = page_data.get("url", "")
 
             # Check if we have complete credentials
@@ -247,6 +289,9 @@ async def extract_session_via_cdp(cdp_port: int, max_wait_sec: int = 180) -> Opt
                     "auth_user": auth_user,
                     "xsrf_token": xsrf_token,
                     "gemini_bl": gemini_bl,
+                    "account_name": account_name,
+                    "account_email": account_email,
+                    "account_photo": account_photo,
                     "cookie_count": len([k for k in EXPORT_ORDER if k in google_cookies])
                 }
 
@@ -322,6 +367,9 @@ def run_login_flow(
         print("\n" + "=" * 65)
         print(" ✅ AUTHENTICATION SUCCESSFUL!")
         print("=" * 65)
+        if auth_data.get("account_email") or auth_data.get("account_name"):
+            acc_str = f"{auth_data.get('account_name') or ''} <{auth_data.get('account_email') or ''}>".strip()
+            print(f" Google Account:     {acc_str}")
         print(f" Saved auth file:    {auth_file_path}")
         print(f" Saved cookie text:  {os.path.abspath('cookie.txt')}")
         print(f" Google Cookies:     {auth_data.get('cookie_count', 0)} captured")
@@ -398,6 +446,8 @@ def check_auth_status(auth_file: str = "gemini-auth.json") -> dict:
         print(" Gemini Auth Status Check")
         print("=" * 55)
         print(f" File:         {os.path.abspath(auth_file)}")
+        if data.get("account_name") or data.get("account_email"):
+            print(f" Account:      {data.get('account_name') or ''} <{data.get('account_email') or ''}>".strip())
         print(f" Cookie:       {'✓ Present' if cookie_str else '✗ Missing'}")
         print(f" SAPISID:      {'✓ Present' if sapisid else '✗ Missing'}")
         print(f" XSRF Token:   {'✓ Present' if xsrf else '✗ Missing'}")
